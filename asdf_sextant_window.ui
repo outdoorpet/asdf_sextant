@@ -181,7 +181,7 @@
            </layout>
           </item>
           <item>
-           <widget class="GraphicsLayoutWidget" name="graph">
+           <widget class="MultiPlotWidget" name="graph">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
               <horstretch>0</horstretch>
@@ -447,6 +447,11 @@
    <class>StationTreeWidget</class>
    <extends>QTreeWidget</extends>
    <header>station_tree_widget.h</header>
+  </customwidget>
+  <customwidget>
+   <class>MultiPlotWidget</class>
+   <extends>QGraphicsView</extends>
+   <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

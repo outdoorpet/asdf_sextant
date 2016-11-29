@@ -615,6 +615,8 @@ class Window(QtGui.QMainWindow):
         self.ui.previous_interval_push_button.setEnabled(True)
         self.ui.next_interval_push_button.setEnabled(True)
 
+
+
         # Get the filter settings.
         filter_settings = {}
         filter_settings["detrend_and_demean"] = \
@@ -631,6 +633,7 @@ class Window(QtGui.QMainWindow):
             temp_st.normalize()
 
         self.ui.graph.clear()
+        self.ui.graph.setMinimumPlotHeight(200)
 
         starttimes = []
         endtimes = []
@@ -1165,9 +1168,9 @@ def launch():
 
 if __name__ == "__main__":
 
-    proxy = raw_input("Proxy:")
-    port = raw_input("Proxy Port:")
-
-    networkProxy = QtNetwork.QNetworkProxy(QtNetwork.QNetworkProxy.HttpProxy, proxy, int(port))
-    QtNetwork.QNetworkProxy.setApplicationProxy(networkProxy)
+    # proxy = raw_input("Proxy:")
+    # port = raw_input("Proxy Port:")
+    #
+    # networkProxy = QtNetwork.QNetworkProxy(QtNetwork.QNetworkProxy.HttpProxy, proxy, int(port))
+    # QtNetwork.QNetworkProxy.setApplicationProxy(networkProxy)
     launch()
