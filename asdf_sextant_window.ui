@@ -413,6 +413,7 @@
     <property name="title">
      <string>Tools</string>
     </property>
+    <addaction name="actionFilter"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -424,6 +425,11 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="actionFilter">
+   <property name="text">
+    <string>Bandpass Filter</string>
    </property>
   </action>
  </widget>

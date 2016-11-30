@@ -223,6 +223,7 @@ class Window(QtGui.QMainWindow):
         self._state = {}
 
         self.ui.openASDF.triggered.connect(self.open_asdf_file)
+        self.ui.bpfilter.triggered.connect(self.bpfilter)
 
         # Add right clickability to station view
         self.ui.station_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -608,14 +609,28 @@ class Window(QtGui.QMainWindow):
     def on_group_by_network_check_box_stateChanged(self, state):
         self.build_station_view_list()
 
+    def bpfilter
+
+    def on_graph_itemClicked(self, event):
+        if event.button() == 4:
+            items = self.ui.graph.scene().items(event.scenePos())
+            sel_plot = [x for x in items if isinstance(x, pg.PlotItem)][0]
+            pos = QtCore.QPointF(event.scenePos())
+
+            vLine = pg.InfiniteLine(angle=90, movable=False)
+            sel_plot.addItem(vLine, ignoreBounds=True)
+
+            vb = sel_plot.vb
+            if sel_plot.sceneBoundingRect().contains(pos):
+                mousePoint = vb.mapSceneToView(pos)
+                vLine.setPos(mousePoint.x())
+
     def update_waveform_plot(self):
         self.ui.central_tab.setCurrentIndex(0)
         self.ui.initial_view_push_button.setEnabled(True)
         self.ui.previous_view_push_button.setEnabled(True)
         self.ui.previous_interval_push_button.setEnabled(True)
         self.ui.next_interval_push_button.setEnabled(True)
-
-
 
         # Get the filter settings.
         filter_settings = {}
@@ -661,11 +676,15 @@ class Window(QtGui.QMainWindow):
             min_values.append(tr.data.min())
             max_values.append(tr.data.max())
 
+            vLine = pg.InfiniteLine(angle=90, movable=True)
+            plot.addItem(vLine, ignoreBounds=True)
+
+            plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
+
         self._state["waveform_plots_min_time"] = min(starttimes)
         self._state["waveform_plots_max_time"] = max(endtimes)
         self._state["waveform_plots_min_value"] = min(min_values)
         self._state["waveform_plots_max_value"] = max(max_values)
-
 
         for plot in self._state["waveform_plots"][1:]:
             plot.setXLink(self._state["waveform_plots"][0])
