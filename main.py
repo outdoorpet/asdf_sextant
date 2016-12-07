@@ -223,7 +223,7 @@ class Window(QtGui.QMainWindow):
         self._state = {}
 
         self.ui.openASDF.triggered.connect(self.open_asdf_file)
-        self.ui.bpfilter.triggered.connect(self.bpfilter)
+        # self.ui.bpfilter.triggered.connect(self.bpfilter)
 
         # Add right clickability to station view
         self.ui.station_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -609,9 +609,9 @@ class Window(QtGui.QMainWindow):
     def on_group_by_network_check_box_stateChanged(self, state):
         self.build_station_view_list()
 
-    def bpfilter(self):
-        self.bpfilter_selected = True
-        self.update_waveform_plot()
+    # def bpfilter(self):
+    #     self.bpfilter_selected = True
+    #     self.update_waveform_plot()
 
     def on_graph_itemClicked(self, event):
         if event.button() == 4:
@@ -639,7 +639,7 @@ class Window(QtGui.QMainWindow):
         filter_settings["detrend_and_demean"] = \
             self.ui.detrend_and_demean_check_box.isChecked()
         filter_settings["normalize"] = self.ui.normalize_check_box.isChecked()
-        filter_settings["bpfilter"] = self.bdfilter_selected
+        #filter_settings["bpfilter"] = self.bdfilter_selected
 
         temp_st = self.st.copy()
 
@@ -650,8 +650,8 @@ class Window(QtGui.QMainWindow):
         if filter_settings["normalize"]:
             temp_st.normalize()
 
-        if filter_settings["bpfilter"]:
-            temp_st.filter("bandpass",freqmin = 0.01, freqmax = 10)
+        # if filter_settings["bpfilter"]:
+        #     temp_st.filter("bandpass",freqmin = 0.01, freqmax = 10)
 
         self.ui.graph.clear()
         self.ui.graph.setMinimumPlotHeight(200)
