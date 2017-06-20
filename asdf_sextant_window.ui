@@ -77,8 +77,8 @@
            </widget>
           </item>
           <item>
-           <widget class="QWebView" name="web_view" native="true">
-            <property name="url" stdset="0">
+           <widget class="QWebView" name="web_view">
+            <property name="url">
              <url>
               <string>about:blank</string>
              </url>
@@ -362,8 +362,8 @@
         <item>
          <layout class="QVBoxLayout" name="verticalLayout_5" stretch="1,1">
           <item>
-           <widget class="QWebView" name="events_web_view" native="true">
-            <property name="url" stdset="0">
+           <widget class="QWebView" name="events_web_view">
+            <property name="url">
              <url>
               <string>about:blank</string>
              </url>
@@ -395,7 +395,7 @@
      <x>0</x>
      <y>0</y>
      <width>1201</width>
-     <height>25</height>
+     <height>26</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -403,6 +403,7 @@
      <string>File</string>
     </property>
     <addaction name="openASDF"/>
+    <addaction name="openJSON_DB"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
     <property name="title">
@@ -430,6 +431,11 @@
   <action name="actionFilter">
    <property name="text">
     <string>Bandpass Filter</string>
+   </property>
+  </action>
+  <action name="openJSON_DB">
+   <property name="text">
+    <string>Open JSON DB</string>
    </property>
   </action>
  </widget>
