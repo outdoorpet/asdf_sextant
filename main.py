@@ -16,6 +16,8 @@ from PyQt4 import QtGui, QtCore, QtWebKit, QtNetwork
 import pyqtgraph as pg
 import qdarkstyle
 
+from collections import defaultdict
+
 from glob import iglob
 import imp
 import inspect
@@ -34,6 +36,7 @@ from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
 from obspy.taup import TauPyModel
 
 from DateAxisItem import DateAxisItem
+from seisds import SeisDB
 
 from sqlalchemy import create_engine, text, Column, Integer, String, or_, and_
 from sqlalchemy.orm import sessionmaker
@@ -41,10 +44,12 @@ from sqlalchemy.ext.declarative import declarative_base
 
 # Enums only exists in Python 3 and we don't really need them here...
 STATION_VIEW_ITEM_TYPES = {
-    "NETWORK": 0,
-    "STATION": 1,
-    "STATIONXML": 2,
-    "WAVEFORM": 3}
+    "FILE": 0,
+    "NETWORK": 1,
+    "STATION": 2,
+    "CHANNEL": 3,
+    "STN_INFO": 4,
+    "CHAN_INFO": 5}
 
 EVENT_VIEW_ITEM_TYPES = {
     "EVENT": 0,
@@ -116,10 +121,13 @@ def sizeof_fmt(num):
     return "%3.1f %s" % (num, "TB")
 
 class timeDialog(QtGui.QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, ph_start=None, ph_end=None):
         QtGui.QDialog.__init__(self, parent)
         self.timeui = extract_time_dialog.Ui_ExtractTimeDialog()
         self.timeui.setupUi(self)
+
+        self.timeui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
+        self.timeui.endtime.setDateTime(QtCore.QDateTime.fromString(ph_end, "yyyy-MM-ddThh:mm:ss"))
 
     def getValues(self):
         return (UTCDateTime(self.timeui.starttime.dateTime().toPyDateTime()),
@@ -220,9 +228,11 @@ class Window(QtGui.QMainWindow):
         self.ui.events_web_view.settings().setAttribute(
             QtWebKit.QWebSettings.DeveloperExtrasEnabled, True)
 
+
         self._state = {}
 
         self.ui.openASDF.triggered.connect(self.open_asdf_file)
+        self.ui.openJSON_DB.triggered.connect(self.open_json_file)
         # self.ui.bpfilter.triggered.connect(self.bpfilter)
 
         # Add right clickability to station view
@@ -338,58 +348,77 @@ class Window(QtGui.QMainWindow):
 
         items = []
 
-        if self.ui.group_by_network_check_box.isChecked():
-            for key, group in itertools.groupby(
-                    self.ds.waveforms,
-                    key=lambda x: x._station_name.split(".")[0]):
-                network_item = QtGui.QTreeWidgetItem(
-                    [key],
-                    type=STATION_VIEW_ITEM_TYPES["NETWORK"])
-                group = sorted(group, key=lambda x: x._station_name)
-                for station in sorted(group, key=lambda x: x._station_name):
-                    station_item = QtGui.QTreeWidgetItem([
-                        station._station_name.split(".")[-1]],
-                        type=STATION_VIEW_ITEM_TYPES["STATION"])
+        # Iterate through station accessors in ASDF file
+        for key, group in itertools.groupby(
+                self.ds.waveforms,
+                key=lambda x: x._station_name.split(".")[0]):
+            network_item = QtGui.QTreeWidgetItem(
+                [key],
+                type=STATION_VIEW_ITEM_TYPES["NETWORK"])
+            group = sorted(group, key=lambda x: x._station_name)
 
-                    # Add children.
-                    children = []
-                    if "StationXML" in station.list():
-                        children.append(
-                            QtGui.QTreeWidgetItem(
-                                ["StationXML"],
-                                type=STATION_VIEW_ITEM_TYPES["STATIONXML"]))
-                    for waveform in station.get_waveform_tags():
-                        children.append(
-                            QtGui.QTreeWidgetItem(
-                                [waveform],
-                                type=STATION_VIEW_ITEM_TYPES["WAVEFORM"]))
-                    station_item.addChildren(children)
+            # set with unique channel codes for station
+            channel_codes_set = set()
 
-                    network_item.addChild(station_item)
-                items.append(network_item)
-
-        else:
-            # Add all the waveforms and stations.
-            for station in self.ds.waveforms:
-                item = QtGui.QTreeWidgetItem(
-                    [station._station_name],
+            # Add all children stations.
+            for station in sorted(group, key=lambda x: x._station_name):
+                station_item = QtGui.QTreeWidgetItem([
+                    station._station_name.split(".")[-1]],
                     type=STATION_VIEW_ITEM_TYPES["STATION"])
 
-                # Add children.
-                children = []
-                if "StationXML" in station.list():
-                    children.append(
-                        QtGui.QTreeWidgetItem(
-                            ["StationXML"],
-                            type=STATION_VIEW_ITEM_TYPES["STATIONXML"]))
-                for waveform in station.get_waveform_tags():
-                    children.append(
-                        QtGui.QTreeWidgetItem(
-                            [waveform],
-                            type=STATION_VIEW_ITEM_TYPES["WAVEFORM"]))
-                item.addChildren(children)
+                # get stationxml (to channel level) for station
+                station_inv = station.StationXML[0][0]
 
-                items.append(item)
+                # add info children
+                station_children = [
+                    QtGui.QTreeWidgetItem(['StartDate: \t%s' % station_inv.start_date.strftime('%Y-%m-%dT%H:%M:%S')],
+                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
+                    QtGui.QTreeWidgetItem(['EndDate: \t%s' % station_inv.end_date.strftime('%Y-%m-%dT%H:%M:%S')],
+                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
+                    QtGui.QTreeWidgetItem(['Latitude: \t%s' % station_inv.latitude],
+                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
+                    QtGui.QTreeWidgetItem(['Longitude: \t%s' % station_inv.longitude],
+                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
+                    QtGui.QTreeWidgetItem(['Elevation: \t%s' % station_inv.elevation],
+                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"])]
+
+                station_item.addChildren(station_children)
+
+                # add channel items
+                for channel_inv in station_inv:
+                    # add the channel code to list
+                    channel_codes_set.add(channel_inv.code)
+
+                    channel_item = QtGui.QTreeWidgetItem(
+                        [channel_inv.code], type=STATION_VIEW_ITEM_TYPES["CHANNEL"])
+
+                    channel_children = [
+                        QtGui.QTreeWidgetItem(
+                            ['StartDate: \t%s' % station_inv.start_date.strftime('%Y-%m-%dT%H:%M:%S')],
+                            type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['EndDate: \t%s' % station_inv.end_date.strftime('%Y-%m-%dT%H:%M:%S')],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Location: \t%s' % channel_inv.location_code],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['SamplRate: \t%s' % channel_inv.sample_rate],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Azimuth: \t%s' % channel_inv.azimuth],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Dip: \t%s' % channel_inv.dip],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Latitude: \t%s' % channel_inv.latitude],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Longitude: \t%s' % channel_inv.longitude],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Elevation: \t%s' % channel_inv.elevation],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"])]
+
+                    channel_item.addChildren(channel_children)
+
+                    station_item.addChild(channel_item)
+
+                network_item.addChild(station_item)
+        items.append(network_item)
 
         self.ui.station_view.insertTopLevelItems(0, items)
 
@@ -477,72 +506,88 @@ class Window(QtGui.QMainWindow):
         popup.exec_(self.ui.references_push_button.parentWidget().mapToGlobal(
                     self.ui.references_push_button.pos()))
 
-    def create_asdf_sql(self, sta):
-        # Function to separate the waveform string into seperate fields
-        def waveform_sep(ws):
-            a = ws.split('__')
-            starttime = int(UTCDateTime(a[1].encode('ascii')).timestamp)
-            endtime = int(UTCDateTime(a[2].encode('ascii')).timestamp)
+    # def create_asdf_sql(self, sta):
+    #     # Function to separate the waveform string into seperate fields
+    #     def waveform_sep(ws):
+    #         a = ws.split('__')
+    #         starttime = int(UTCDateTime(a[1].encode('ascii')).timestamp)
+    #         endtime = int(UTCDateTime(a[2].encode('ascii')).timestamp)
+    #
+    #         # Returns: (station_id, starttime, endtime, waveform_tag)
+    #         return (ws.encode('ascii'), a[0].encode('ascii'), starttime, endtime, a[3].encode('ascii'))
+    #
+    #     # Get the SQL file for station
+    #     SQL_filename = r""+os.path.dirname(self.filename)+ '/' + str(sta.split('.')[1]) + '.db'
+    #
+    #     check_SQL = exists(SQL_filename)
+    #
+    #     if check_SQL:
+    #         return
+    #     # need to create SQL database
+    #     elif not check_SQL:
+    #         # Initialize (open/create) the sqlalchemy sqlite engine
+    #         engine = create_engine('sqlite:///' + SQL_filename)
+    #         Session = sessionmaker()
+    #
+    #         # Get list of all waveforms for station
+    #         waveforms_list = self.ds.waveforms[str(sta)].list()
+    #         #remove the station XML file
+    #         waveforms_list.remove('StationXML')
+    #
+    #         # Create all tables in the engine
+    #         Base.metadata.create_all(engine)
+    #
+    #         # Initiate a session with the SQL database so that we can add data to it
+    #         Session.configure(bind=engine)
+    #         session = Session()
+    #
+    #         progressDialog = QtGui.QProgressDialog("Building SQL Library for Station {0}".format(str(sta)),
+    #                                                "Cancel", 0, len(waveforms_list))
+    #
+    #         # go through the waveforms (ignore stationxml file)
+    #         for _i, sta_wave in enumerate(waveforms_list):
+    #             progressDialog.setValue(_i)
+    #
+    #             # The ASDF formatted waveform name for SQL [full_id, station_id, starttime, endtime, tag]
+    #             waveform_info = waveform_sep(sta_wave)
+    #
+    #             # create new SQL entry
+    #             new_wave_SQL = Waveforms(full_id=waveform_info[0], station_id=waveform_info[1],
+    #                                      starttime=waveform_info[2],
+    #                                      endtime=waveform_info[3], tag=waveform_info[4])
+    #
+    #             # Add the waveform info to the session
+    #             session.add(new_wave_SQL)
+    #             session.commit()
 
-            # Returns: (station_id, starttime, endtime, waveform_tag)
-            return (ws.encode('ascii'), a[0].encode('ascii'), starttime, endtime, a[3].encode('ascii'))
-
-        # Get the SQL file for station
-        SQL_filename = r""+os.path.dirname(self.filename)+ '/' + str(sta.split('.')[1]) + '.db'
-
-        check_SQL = exists(SQL_filename)
-
-        if check_SQL:
+    def open_json_file(self):
+        self.db_filename = str(QtGui.QFileDialog.getOpenFileName(
+            parent=self, caption="Choose JSON Database File",
+            directory=os.path.expanduser(os.path.dirname(self.asdf_filename)),
+            filter="JSON Database File (*.json)"))
+        if not self.db_filename:
             return
-        # need to create SQL database
-        elif not check_SQL:
-            # Initialize (open/create) the sqlalchemy sqlite engine
-            engine = create_engine('sqlite:///' + SQL_filename)
-            Session = sessionmaker()
 
-            # Get list of all waveforms for station
-            waveforms_list = self.ds.waveforms[str(sta)].list()
-            #remove the station XML file
-            waveforms_list.remove('StationXML')
+        print('')
+        print("Initializing Database..")
 
-            # Create all tables in the engine
-            Base.metadata.create_all(engine)
+        # create the seismic database
+        self.seisdb = SeisDB(json_file=self.db_filename)
 
-            # Initiate a session with the SQL database so that we can add data to it
-            Session.configure(bind=engine)
-            session = Session()
-
-            progressDialog = QtGui.QProgressDialog("Building SQL Library for Station {0}".format(str(sta)),
-                                                   "Cancel", 0, len(waveforms_list))
-
-            # go through the waveforms (ignore stationxml file)
-            for _i, sta_wave in enumerate(waveforms_list):
-                progressDialog.setValue(_i)
-
-                # The ASDF formatted waveform name for SQL [full_id, station_id, starttime, endtime, tag]
-                waveform_info = waveform_sep(sta_wave)
-
-                # create new SQL entry
-                new_wave_SQL = Waveforms(full_id=waveform_info[0], station_id=waveform_info[1],
-                                         starttime=waveform_info[2],
-                                         endtime=waveform_info[3], tag=waveform_info[4])
-
-                # Add the waveform info to the session
-                session.add(new_wave_SQL)
-                session.commit()
+        print("Seismic Database Initilized!")
 
     def open_asdf_file(self):
         """
         Fill the station tree widget upon opening a new file.
         """
-        self.filename = str(QtGui.QFileDialog.getOpenFileName(
+        self.asdf_filename = str(QtGui.QFileDialog.getOpenFileName(
             parent=self, caption="Choose File",
             directory=os.path.expanduser("~"),
             filter="ASDF files (*.h5)"))
-        if not self.filename:
+        if not self.asdf_filename:
             return
 
-        self.ds = pyasdf.ASDFDataSet(self.filename)
+        self.ds = pyasdf.ASDFDataSet(self.asdf_filename)
 
         for station_id, coordinates in self.ds.get_all_coordinates().items():
             if not coordinates:
@@ -619,7 +664,7 @@ class Window(QtGui.QMainWindow):
             sel_plot = [x for x in items if isinstance(x, pg.PlotItem)][0]
             pos = QtCore.QPointF(event.scenePos())
 
-            vLine = pg.InfiniteLine(angle=90, movable=False)
+            vLine = pg.InfiniteLine(angle=90, movable=True)
             sel_plot.addItem(vLine, ignoreBounds=True)
 
             vb = sel_plot.vb
@@ -757,17 +802,15 @@ class Window(QtGui.QMainWindow):
             pass
         elif t == STATION_VIEW_ITEM_TYPES["STATION"]:
             station = get_station(item)
-            #Run Method to create ASDF SQL database with SQLite (one db per station within ASDF)
-            self.create_asdf_sql(station)
-        elif t == STATION_VIEW_ITEM_TYPES["STATIONXML"]:
-            station = get_station(item.parent())
-            self.ds.waveforms[station].StationXML.plot()#plot_response(0.001)
-        elif t == STATION_VIEW_ITEM_TYPES["WAVEFORM"]:
-            station = get_station(item.parent())
-            self._state["current_station_object"] = self.ds.waveforms[station]
-            self._state["current_waveform_tag"] = item.text(0)
-            self.st = self.ds.waveforms[station][str(item.text(0))]
-            self.update_waveform_plot()
+        # elif t == STATION_VIEW_ITEM_TYPES["STATIONXML"]:
+        #     station = get_station(item.parent())
+        #     self.ds.waveforms[station].StationXML.plot()#plot_response(0.001)
+        # elif t == STATION_VIEW_ITEM_TYPES["WAVEFORM"]:
+        #     station = get_station(item.parent())
+        #     # self._state["current_station_object"] = self.ds.waveforms[station]
+        #     # self._state["current_waveform_tag"] = item.text(0)
+        #     # self.st = self.ds.waveforms[station][str(item.text(0))]
+        #     # self.update_waveform_plot()
         else:
             pass
 
@@ -785,16 +828,21 @@ class Window(QtGui.QMainWindow):
         if t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
             self.net_item_menu = QtGui.QMenu(self)
             ext_menu = QtGui.QMenu('Select NSLC', self)
-        elif t == STATION_VIEW_ITEM_TYPES["STATIONXML"]:
-            pass
-        elif t == STATION_VIEW_ITEM_TYPES["WAVEFORM"]:
-            pass
+        # elif t == STATION_VIEW_ITEM_TYPES["STATIONXML"]:
+        #     pass
+        # elif t == STATION_VIEW_ITEM_TYPES["WAVEFORM"]:
+        #     pass
         elif t == STATION_VIEW_ITEM_TYPES["STATION"]:
             station = get_station(item)
+            # make sure JSON DB is loaded in
+            if not self.seisdb:
+                print("No DB is Loaded!!")
+                return
+
             wave_tag_list = self.ds.waveforms[station].get_waveform_tags()
 
             # Run Method to create ASDF SQL database with SQLite (one db per station within ASDF)
-            self.create_asdf_sql(station)
+            # self.create_asdf_sql(station)
 
             self.sta_item_menu = QtGui.QMenu(self)
             ext_menu = QtGui.QMenu('Extract Time Interval', self)
@@ -835,6 +883,7 @@ class Window(QtGui.QMainWindow):
             event = str(item.parent().parent().text(0))
 
         js_call = "highlightEvent('{event_id}');".format(event_id=event)
+        print(js_call)
         self.ui.events_web_view.page().mainFrame().evaluateJavaScript(js_call)
 
     def event_tree_widget_rightClicked(self, position):
@@ -1012,11 +1061,15 @@ class Window(QtGui.QMainWindow):
             station = get_station(item, parent=False)
             js_call = "highlightStation('{station}')".format(station=station)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-        elif t == STATION_VIEW_ITEM_TYPES["STATIONXML"]:
+        elif t == STATION_VIEW_ITEM_TYPES["CHANNEL"]:
             station = get_station(item)
             js_call = "highlightStation('{station}')".format(station=station)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-        elif t == STATION_VIEW_ITEM_TYPES["WAVEFORM"]:
+        elif t == STATION_VIEW_ITEM_TYPES["CHAN_INFO"]:
+            station = get_station(item)
+            js_call = "highlightStation('{station}')".format(station=station)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+        elif t == STATION_VIEW_ITEM_TYPES["STN_INFO"]:
             station = get_station(item)
             js_call = "highlightStation('{station}')".format(station=station)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
@@ -1046,57 +1099,92 @@ class Window(QtGui.QMainWindow):
         # Open a new st object
         self.st = Stream()
 
+
         # If override flag then we are calling this
         # method by using prev/next interval buttons
         if override:
+            print(kwargs["st_ids"])
+            net = str(kwargs["st_ids"][0]).split('.')[0]
+            sta = str(kwargs["st_ids"][0]).split('.')[1]
+            stnxml = self.ds.waveforms[net+'.'+sta].StationXML
+            # get the channels for that station
+            xml_list = stnxml.get_contents()['channels']
+            rec_start = stnxml[0][0].start_date
+
+            chan_list = []
+
+            for id in xml_list:
+                chan = id.split('.')[-1]
+                chan_list.append(str(chan))
+
             interval_tuple = (self.new_start_time.timestamp, self.new_end_time.timestamp)
-            for _i, st_id in enumerate(kwargs['st_ids']):
+            query = self.seisdb.queryByTime([sta], chan_list, interval_tuple[0],
+                                            interval_tuple[1])
 
-                sta = str(st_id.split('.')[0])+'.'+str(st_id.split('.')[1])
-                # Get the SQL file for station
-                SQL_filename = r""+os.path.dirname(self.filename) + '/' + str(st_id.split('.')[1]) + '.db'
+            for matched_info in query.values():
+                print(matched_info["ASDF_tag"])
 
-                query_stmt = text("Waveforms.tag == :tag AND "
-                                  "Waveforms.station_id == :stid AND ("
-                                  "(Waveforms.starttime >= :start AND :end >= Waveforms.endtime) OR"
-                                  "(Waveforms.starttime <= :end AND :end <= Waveforms.endtime) OR"
-                                  "(Waveforms.starttime <= :start AND :start <= Waveforms.endtime))")
+                # read the data from the ASDF into stream
+                temp_tr = self.ds.waveforms[net+'.'+sta][matched_info["ASDF_tag"]][0]
 
-                query_stmt = query_stmt.bindparams(stid=st_id, start=interval_tuple[0], end=interval_tuple[1],
-                                                   tag=kwargs['st_tags'][_i])
+                # trim trace to start and endtime
+                temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
 
-                ret_st = self.query_sql_db(query_stmt, SQL_filename, sta)
+                # append trace to stream
+                self.st += temp_tr
 
-                self.st += ret_st
+                # free memory
+                temp_tr = None
 
 
 
         elif not override:
+            stnxml = self.ds.waveforms[kwargs['sta']].StationXML
+            # get the channels for that station
+            xml_list = stnxml.get_contents()['channels']
+            rec_start = stnxml[0][0].start_date
+
+            chan_list = []
+
+            for id in xml_list:
+                chan = id.split('.')[-1]
+                chan_list.append(str(chan))
             # Launch the custom extract time dialog
-            dlg = timeDialog(self)
+            dlg = timeDialog(self, ph_start=str(rec_start).split('.')[0], ph_end=str(rec_start + 60*60).split('.')[0])
             if dlg.exec_():
                 values = dlg.getValues()
                 interval_tuple = (values[0].timestamp, values[1].timestamp)
 
-                # Get the SQL file for station
-                SQL_filename = r""+os.path.dirname(self.filename) + '/' + str(kwargs['sta'].split('.')[1]) + '.db'
+                print(interval_tuple)
 
-                query_stmt = text("Waveforms.tag == :tag AND ("
-                                  "(Waveforms.starttime >= :start AND :end >= Waveforms.endtime) OR"
-                                  "(Waveforms.starttime <= :end AND :end <= Waveforms.endtime) OR"
-                                  "(Waveforms.starttime <= :start AND :start <= Waveforms.endtime))")
 
-                query_stmt = query_stmt.bindparams(start=interval_tuple[0],end=interval_tuple[1],
-                                                   tag=kwargs['wave_tag'])
+                print('---------------------------------------')
+                print('Finding Data for specified time interval.....')
 
-                ret_st = self.query_sql_db(query_stmt, SQL_filename, kwargs['sta'])
 
-                self.st += ret_st
+                query = self.seisdb.queryByTime([str(kwargs['sta']).split('.')[1]], chan_list, interval_tuple[0], interval_tuple[1])
 
+                for matched_info in query.values():
+                    print(matched_info["ASDF_tag"])
+
+                    # read the data from the ASDF into stream
+                    temp_tr = self.ds.waveforms[kwargs['sta']][matched_info["ASDF_tag"]][0]
+
+                    # trim trace to start and endtime
+                    temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
+
+                    # append trace to stream
+                    self.st += temp_tr
+
+                    # free memory
+                    temp_tr = None
 
         if self.st.__nonzero__():
             # Attempt to merge all traces with matching ID'S in place
+            print('')
+            print('Merging Traces from %s Stations....' % len(self.st))
             self.st.merge()
+            print('\nTrimming Traces to specified time interval....')
             self.st.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
             self.update_waveform_plot()
         else:
@@ -1135,6 +1223,7 @@ class Window(QtGui.QMainWindow):
                     self.st += station[filtered_id]
 
             if self.st.__nonzero__():
+                print(self.st)
                 # Get quake origin info
                 origin_info = event_obj.preferred_origin() or event_obj.origins[0]
 
