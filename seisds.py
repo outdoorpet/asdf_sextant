@@ -71,8 +71,8 @@ class SeisDB(object):
 
                     self._index_dict_list.append(tuple(temp_list))
 
-                dt = np.dtype(type_list)
-                self._indexed_np_array = np.array(self._index_dict_list, dtype=dt)
+                self.dt = np.dtype(type_list)
+                self._indexed_np_array = np.array(self._index_dict_list, dtype=self.dt)
                 self._use_numpy_index = True
                 self._valid_index = True
 
@@ -142,7 +142,58 @@ class SeisDB(object):
                         "new_network": self._indexed_np_array['net'][k]}
                     for k in _indexed_np_array_masked[0]}
 
-    def get_recording_intervals(self, sta):
+    def get_recording_intervals(self, sta, chan):
+
+        # print(self._indexed_np_array)
+        _indexed_np_array_masked = np.where((np.in1d(self._indexed_np_array['sta'], sta))
+                                            & (np.in1d(self._indexed_np_array['cha'], chan)))
+        # print(_indexed_np_array_masked)
+
+        _masked_np_array = self._indexed_np_array[_indexed_np_array_masked]
+        # print(_masked_np_array)
+
+        # print(np.sort(_masked_np_array, order='st'))
+
+        _st_array = _masked_np_array["st"]
+        _et_array = _masked_np_array["et"]
+
+        # print(_st_array)
+
+        _arg_sorted_st_array = np.argsort(_st_array)
+
+        _sorted_st_array = _st_array[_arg_sorted_st_array]
+        _sorted_et_array = _et_array[_arg_sorted_st_array]
+
+        # print(_arg_sorted_st_array)
+        # print(_sorted_st_array)
+        # print(_sorted_et_array)
+
+        # offset the starttime array so that we start from the second recorded waveform
+        _offset_st_array = _sorted_st_array[1:]
+
+        # print(_offset_st_array)
+
+        _diff_array = _offset_st_array-_sorted_et_array[:-1]
+
+        # print(_diff_array)
+
+        # now get indexes when gap (diff positive) or overlap (diff negative)
+        # remember to add 1 to index because of offset
+        _sorted_gaps_index = np.where(_diff_array > 1)
+        # _sorted_ovlps_index = np.where(_diff_array < 1)
+
+        # print(_sorted_gaps_index)
+
+        # now get the gap_starttimes and gap endtimes
+        gaps_start_list = list(_sorted_et_array[_sorted_gaps_index])
+        gaps_end_list = list(_offset_st_array[_sorted_gaps_index])
+
+        return(np.array([gaps_start_list, gaps_end_list]))
+
+
+
+
+
 
 
 if __name__ == "__main__":

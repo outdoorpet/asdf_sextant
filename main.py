@@ -12,9 +12,11 @@ Graphical user interface for Instaseis.
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-from PyQt4 import QtGui, QtCore, QtWebKit, QtNetwork
+from PyQt4 import QtGui, QtCore, QtWebKit, QtNetwork, uic
 import pyqtgraph as pg
 import qdarkstyle
+
+import numpy as np
 
 from collections import defaultdict
 
@@ -42,6 +44,15 @@ from sqlalchemy import create_engine, text, Column, Integer, String, or_, and_
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
+# load in Qt Designer UI files
+asdf_sextant_window_ui = "asdf_sextant_window.ui"
+select_stacomp_dialog_ui = "select_stacomp_dialog.ui"
+extract_time_dialog_ui = "extract_time_dialog.ui"
+
+Ui_MainWindow, QtBaseClass = uic.loadUiType(asdf_sextant_window_ui)
+Ui_SelectDialog, QtBaseClass = uic.loadUiType(select_stacomp_dialog_ui)
+Ui_ExtractTimeDialog, QtBaseClass = uic.loadUiType(extract_time_dialog_ui)
+
 # Enums only exists in Python 3 and we don't really need them here...
 STATION_VIEW_ITEM_TYPES = {
     "FILE": 0,
@@ -67,46 +78,34 @@ pg.setConfigOptions(antialias=True, foreground=(200, 200, 200),
                     background=None)
 
 
-Base = declarative_base()
-
-# Class for SQLite database for wavefoms belonging to station
-class Waveforms(Base):
-    __tablename__ = 'waveforms'
-    # Here we define columns for the SQL table
-    starttime = Column(Integer)
-    endtime = Column(Integer)
-    station_id = Column(String(250), nullable=False)
-    tag = Column(String(250), nullable=False)
-    full_id = Column(String(250), nullable=False, primary_key=True)
-
-def compile_and_import_ui_files():
-    """
-    Automatically compiles all .ui files found in the same directory as the
-    application py file.
-    They will have the same name as the .ui files just with a .py extension.
-
-    Needs to be defined in the same file as function loading the gui as it
-    modifies the globals to be able to automatically import the created py-ui
-    files. Its just very convenient.
-    """
-    directory = os.path.dirname(os.path.abspath(
-        inspect.getfile(inspect.currentframe())))
-    for filename in iglob(os.path.join(directory, '*.ui')):
-        ui_file = filename
-        py_ui_file = os.path.splitext(ui_file)[0] + os.path.extsep + 'py'
-        if not os.path.exists(py_ui_file) or \
-                (os.path.getmtime(ui_file) >= os.path.getmtime(py_ui_file)):
-            from PyQt4 import uic
-            print("Compiling ui file: %s" % ui_file)
-            with open(py_ui_file, 'w') as open_file:
-                uic.compileUi(ui_file, open_file)
-        # Import the (compiled) file.
-        try:
-            import_name = os.path.splitext(os.path.basename(py_ui_file))[0]
-            globals()[import_name] = imp.load_source(import_name, py_ui_file)
-        except ImportError as e:
-            print("Error importing %s" % py_ui_file)
-            print(e.message)
+# def compile_and_import_ui_files():
+#     """
+#     Automatically compiles all .ui files found in the same directory as the
+#     application py file.
+#     They will have the same name as the .ui files just with a .py extension.
+#
+#     Needs to be defined in the same file as function loading the gui as it
+#     modifies the globals to be able to automatically import the created py-ui
+#     files. Its just very convenient.
+#     """
+#     directory = os.path.dirname(os.path.abspath(
+#         inspect.getfile(inspect.currentframe())))
+#     for filename in iglob(os.path.join(directory, '*.ui')):
+#         ui_file = filename
+#         py_ui_file = os.path.splitext(ui_file)[0] + os.path.extsep + 'py'
+#         if not os.path.exists(py_ui_file) or \
+#                 (os.path.getmtime(ui_file) >= os.path.getmtime(py_ui_file)):
+#             from PyQt4 import uic
+#             print("Compiling ui file: %s" % ui_file)
+#             with open(py_ui_file, 'w') as open_file:
+#                 uic.compileUi(ui_file, open_file)
+#         # Import the (compiled) file.
+#         try:
+#             import_name = os.path.splitext(os.path.basename(py_ui_file))[0]
+#             globals()[import_name] = imp.load_source(import_name, py_ui_file)
+#         except ImportError as e:
+#             print("Error importing %s" % py_ui_file)
+#             print(e.message)
 
 def sizeof_fmt(num):
     """
@@ -120,10 +119,95 @@ def sizeof_fmt(num):
         num /= 1024.0
     return "%3.1f %s" % (num, "TB")
 
+class DataAvailPlot(QtGui.QDialog):
+    '''
+    Dialog for Data Availablity plot
+    '''
+
+    def __init__(self, parent=None, sta_list=None, chan_list=None, rec_int_dict=None):
+        super(DataAvailPlot, self).__init__(parent)
+        self.setWindowTitle('Data Availability Plot')
+
+        self.rec_int_dict = rec_int_dict
+        self.sta_list = sta_list
+        self.chan_list = chan_list
+
+        self.initUI()
+        self.plot_data()
+
+    def initUI(self):
+        vbox = QtGui.QVBoxLayout()
+        self.setLayout(vbox)
+
+        self.data_avail_graph_view = pg.GraphicsLayoutWidget()
+
+        vbox.addWidget(self.data_avail_graph_view)
+
+        self.show()
+
+    def dispMousePos(self, pos):
+        # Display current mouse coords if over the scatter plot area as a tooltip
+        try:
+            x_coord = UTCDateTime(self.plot.vb.mapSceneToView(pos).toPoint().x()).ctime()
+            self.time_tool = self.plot.setToolTip(x_coord)
+        except:
+            pass
+
+    def plot_data(self):
+        # Launch the custom station/component selection dialog
+        sel_dlg = selectionDialog(parent=self, sta_list=self.sta_list, chan_list=self.chan_list)
+        if sel_dlg.exec_():
+            select_sta, select_comp = sel_dlg.getSelected()
+
+            enum_sta = list(enumerate(select_sta))
+            # rearrange dict
+            sta_id_dict = dict([(b, a) for a, b in enum_sta])
+
+            y_axis_string = pg.AxisItem(orientation='left')
+            y_axis_string.setTicks([enum_sta])
+
+            def get_sta_id(sta):
+                return (sta_id_dict[sta])
+
+            # Set up the plotting area
+            self.plot = self.data_avail_graph_view.addPlot(0, 0,
+                                                           axisItems={'bottom': DateAxisItem(orientation='bottom',
+                                                                                             utcOffset=0),
+                                                                      'left': y_axis_string})
+            self.plot.setMouseEnabled(x=True, y=False)
+            # When Mouse is moved over plot print the data coordinates
+            self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
+
+            rec_midpoints = []
+            sta_ids = []
+            diff_frm_mid_list = []
+
+            # iterate through stations
+            for stn_key, rec_array in self.rec_int_dict.iteritems():
+                print(rec_array)
+
+                if not stn_key in select_sta:
+                    continue
+                # iterate through gaps list
+                for _i in range(rec_array.shape[1]):
+                    diff_frm_mid = (rec_array[1,_i] - rec_array[0, _i]) / 2.0
+
+                    diff_frm_mid_list.append(diff_frm_mid)
+
+                    rec_midpoints.append(rec_array[0, _i] + diff_frm_mid)
+                    sta_ids.append(get_sta_id(stn_key))
+
+            # Plot Error bar data recording intervals
+            err = pg.ErrorBarItem(x=np.array(rec_midpoints), y=np.array(sta_ids), left=np.array(diff_frm_mid_list),
+                                  right=np.array(diff_frm_mid_list), beam=0.06)
+
+            self.plot.addItem(err)
+
+
 class timeDialog(QtGui.QDialog):
     def __init__(self, parent=None, ph_start=None, ph_end=None):
         QtGui.QDialog.__init__(self, parent)
-        self.timeui = extract_time_dialog.Ui_ExtractTimeDialog()
+        self.timeui = Ui_ExtractTimeDialog()
         self.timeui.setupUi(self)
 
         self.timeui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
@@ -133,38 +217,55 @@ class timeDialog(QtGui.QDialog):
         return (UTCDateTime(self.timeui.starttime.dateTime().toPyDateTime()),
                 UTCDateTime(self.timeui.endtime.dateTime().toPyDateTime()))
 
+
 class selectionDialog(QtGui.QDialog):
     '''
     Select all functionality is modified from Brendan Abel & dbc from their
     stackoverflow communication Feb 24th 2016:
     http://stackoverflow.com/questions/35611199/creating-a-toggling-check-all-checkbox-for-a-listview
     '''
-    def __init__(self, parent=None, sta_list=None):
+
+    def __init__(self, parent=None, sta_list=None, chan_list=None):
         QtGui.QDialog.__init__(self, parent)
-        self.selui = select_stacomp_dialog.Ui_SelectDialog()
+        self.selui = Ui_SelectDialog()
         self.selui.setupUi(self)
+        # self.setWindowTitle('Selection Dialog')
 
         # Set all check box to checked
-        self.selui.check_all.setChecked(True)
+        # self.selui.check_all.setChecked(True)
         self.selui.check_all.clicked.connect(self.selectAllCheckChanged)
 
-        self.model = QtGui.QStandardItemModel(self.selui.StaListView)
+        # add stations to station select items
+        self.sta_model = QtGui.QStandardItemModel(self.selui.StaListView)
 
         self.sta_list = sta_list
         for sta in self.sta_list:
             item = QtGui.QStandardItem(sta)
             item.setCheckable(True)
 
-            self.model.appendRow(item)
+            self.sta_model.appendRow(item)
 
-        self.selui.StaListView.setModel(self.model)
+        self.selui.StaListView.setModel(self.sta_model)
+        # connect to method to update stae of select all checkbox
         self.selui.StaListView.clicked.connect(self.listviewCheckChanged)
+
+        # add channels to channel select items
+        self.chan_model = QtGui.QStandardItemModel(self.selui.ChanListView)
+
+        self.chan_list = chan_list
+        for chan in self.chan_list:
+            item = QtGui.QStandardItem(chan)
+            item.setCheckable(True)
+
+            self.chan_model.appendRow(item)
+
+        self.selui.ChanListView.setModel(self.chan_model)
 
     def selectAllCheckChanged(self):
         ''' updates the listview based on select all checkbox '''
-        model = self.selui.StaListView.model()
-        for index in range(model.rowCount()):
-            item = model.item(index)
+        sta_model = self.selui.StaListView.model()
+        for index in range(sta_model.rowCount()):
+            item = sta_model.item(index)
             if item.isCheckable():
                 if self.selui.check_all.isChecked():
                     item.setCheckState(QtCore.Qt.Checked)
@@ -173,8 +274,8 @@ class selectionDialog(QtGui.QDialog):
 
     def listviewCheckChanged(self):
         ''' updates the select all checkbox based on the listview '''
-        model = self.selui.StaListView.model()
-        items = [model.item(index) for index in range(model.rowCount())]
+        sta_model = self.selui.StaListView.model()
+        items = [sta_model.item(index) for index in range(sta_model.rowCount())]
 
         if all(item.checkState() == QtCore.Qt.Checked for item in items):
             self.selui.check_all.setTristate(False)
@@ -186,26 +287,29 @@ class selectionDialog(QtGui.QDialog):
             self.selui.check_all.setTristate(False)
             self.selui.check_all.setCheckState(QtCore.Qt.Unchecked)
 
-
-
     def getSelected(self):
         select_stations = []
+        select_channels = []
         i = 0
-        while self.model.item(i):
-            if self.model.item(i).checkState():
-                select_stations.append(str(self.model.item(i).text()))
+        while self.sta_model.item(i):
+            if self.sta_model.item(i).checkState():
+                select_stations.append(str(self.sta_model.item(i).text()))
+            i += 1
+        i = 0
+        while self.chan_model.item(i):
+            if self.chan_model.item(i).checkState():
+                select_channels.append(str(self.chan_model.item(i).text()))
             i += 1
 
-        # Return Selected stations and checked components
-        return(select_stations, [self.selui.zcomp.isChecked(),
-               self.selui.ncomp.isChecked(),
-               self.selui.ecomp.isChecked()])
+        # Return Selected stations and selected channels
+        return (select_stations, select_channels)
+
 
 class Window(QtGui.QMainWindow):
     def __init__(self):
         QtGui.QMainWindow.__init__(self)
         # Injected by the compile_and_import_ui_files() function.
-        self.ui = asdf_sextant_window.Ui_MainWindow()  # NOQA
+        self.ui = Ui_MainWindow()  # NOQA
         self.ui.setupUi(self)
 
         self.provenance_list_model = QtGui.QStandardItemModel(
@@ -247,6 +351,7 @@ class Window(QtGui.QMainWindow):
 
         QtGui.QApplication.instance().focusChanged.connect(self.changed_widget_focus)
 
+
         tmp = tempfile.mkstemp("asdf_sextant")
         os.close(tmp[0])
         try:
@@ -260,6 +365,9 @@ class Window(QtGui.QMainWindow):
             os.remove(self._tempfile)
         except:
             pass
+
+    def closeEvent(self, QCloseEvent):
+        del self.ds
 
     def __connect_signal_and_slots(self):
         """
@@ -423,6 +531,34 @@ class Window(QtGui.QMainWindow):
         items.append(network_item)
 
         self.ui.station_view.insertTopLevelItems(0, items)
+
+    def build_auxillary_tree_view(self):
+        self.ui.auxiliary_data_tree_view.clear()
+
+        # Also add the auxiliary data.
+
+        def recursive_tree(name, item):
+            if isinstance(item, pyasdf.utils.AuxiliaryDataAccessor):
+                data_type_item = QtGui.QTreeWidgetItem(
+                    [name],
+                    type=AUX_DATA_ITEM_TYPES["DATA_TYPE"])
+                children = []
+                for sub_item in item.list():
+                    children.append(recursive_tree(sub_item, item[sub_item]))
+                data_type_item.addChildren(children)
+            elif isinstance(item, pyasdf.utils.AuxiliaryDataContainer):
+                data_type_item = QtGui.QTreeWidgetItem(
+                    [name],
+                    type=AUX_DATA_ITEM_TYPES["DATA_ITEM"])
+            else:
+                raise NotImplementedError
+            return data_type_item
+
+        items = []
+        for data_type in self.ds.auxiliary_data.list():
+            items.append(recursive_tree(data_type,
+                                        self.ds.auxiliary_data[data_type]))
+        self.ui.auxiliary_data_tree_view.insertTopLevelItems(0, items)
 
     def on_initial_view_push_button_released(self):
         self.reset_view()
@@ -609,30 +745,7 @@ class Window(QtGui.QMainWindow):
             item = QtGui.QStandardItem(provenance)
             self.provenance_list_model.appendRow(item)
 
-        # Also add the auxiliary data.
-
-        def recursive_tree(name, item):
-            if isinstance(item, pyasdf.utils.AuxiliaryDataAccessor):
-                data_type_item = QtGui.QTreeWidgetItem(
-                    [name],
-                    type=AUX_DATA_ITEM_TYPES["DATA_TYPE"])
-                children = []
-                for sub_item in item.list():
-                    children.append(recursive_tree(sub_item, item[sub_item]))
-                data_type_item.addChildren(children)
-            elif isinstance(item, pyasdf.utils.AuxiliaryDataContainer):
-                data_type_item = QtGui.QTreeWidgetItem(
-                    [name],
-                    type=AUX_DATA_ITEM_TYPES["DATA_ITEM"])
-            else:
-                raise NotImplementedError
-            return data_type_item
-
-        items = []
-        for data_type in self.ds.auxiliary_data.list():
-            items.append(recursive_tree(data_type,
-                                        self.ds.auxiliary_data[data_type]))
-        self.ui.auxiliary_data_tree_view.insertTopLevelItems(0, items)
+        self.build_auxillary_tree_view()
 
         sb = self.ui.status_bar
         if hasattr(sb, "_widgets"):
@@ -973,13 +1086,16 @@ class Window(QtGui.QMainWindow):
                 self.ui.auxiliary_data_file_page)
         # 2D Shapes.
         elif len(aux_data.data.shape) == 2:
-            img = pg.ImageItem(border="#3D8EC9")
-            img.setImage(aux_data.data.value)
-            vb = graph.addViewBox()
-            vb.setAspectLocked(True)
-            vb.addItem(img)
-            self.ui.auxiliary_data_stacked_widget.setCurrentWidget(
-                self.ui.auxiliary_data_graph_page)
+            try:
+                img = pg.ImageItem(border="#3D8EC9")
+                img.setImage(aux_data.data.value)
+                vb = graph.addViewBox()
+                vb.setAspectLocked(True)
+                vb.addItem(img)
+                self.ui.auxiliary_data_stacked_widget.setCurrentWidget(
+                    self.ui.auxiliary_data_graph_page)
+            except ValueError:
+                pass
         # Anything else is currently not supported.
         else:
             raise NotImplementedError
@@ -1101,7 +1217,6 @@ class Window(QtGui.QMainWindow):
         # Open a new st object
         self.st = Stream()
 
-
         # If override flag then we are calling this
         # method by using prev/next interval buttons
         if override:
@@ -1137,8 +1252,6 @@ class Window(QtGui.QMainWindow):
 
                 # free memory
                 temp_tr = None
-
-
 
         elif not override:
             stnxml = self.ds.waveforms[kwargs['sta']].StationXML
@@ -1200,151 +1313,192 @@ class Window(QtGui.QMainWindow):
             msg.setStandardButtons(QtGui.QMessageBox.Ok)
             msg.exec_()
 
-    def analyse_earthquake(self, event_obj):
-        # Get event catalogue
-        self.event_cat = self.ds.events
-        comp_list = ['*Z', '*N', '*E']
-
-
-        # Launch the custom station/component selection dialog
-        sel_dlg = selectionDialog(parent=self, sta_list=self.ds.waveforms.list())
-        if sel_dlg.exec_():
-            select_sta, bool_comp = sel_dlg.getSelected()
-            query_comp = list(itertools.compress(comp_list, bool_comp))
-
-            # Open up a new stream object
-            self.st = Stream()
-
-            # use the ifilter functionality to extract desired streams to visualize
-            for station in self.ds.ifilter(self.ds.q.station == map(lambda el: el.split('.')[1], select_sta),
-                                           self.ds.q.channel == query_comp,
-                                           self.ds.q.event == event_obj):
-                for filtered_id in station.list():
-                    if filtered_id == 'StationXML':
-                        continue
-                    self.st += station[filtered_id]
-
-            if self.st.__nonzero__():
-                print(self.st)
-                # Get quake origin info
-                origin_info = event_obj.preferred_origin() or event_obj.origins[0]
-
-                # Iterate through traces
-                for tr in self.st:
-                    # Run Java Script to highlight all selected stations in station view
-                    js_call = "highlightStation('{station}')".format(station=tr.stats.network + '.' +tr.stats.station)
-                    self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-
-
-                    # Get inventory for trace
-                    inv = self.ds.waveforms[tr.stats.network + '.' +tr.stats.station].StationXML
-                    sta_coords = inv.get_coordinates(tr.get_id())
-
-                    dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
-                                                    sta_coords['longitude'],
-                                                    origin_info.latitude,
-                                                    origin_info.longitude)
-                    dist_deg = kilometer2degrees(dist/1000.0)
-                    tt_model = TauPyModel(model='iasp91')
-                    arrivals = tt_model.get_travel_times(origin_info.depth/1000.0, dist_deg, ('P'))
-
-                    # Write info to trace header
-                    tr.stats.distance = dist
-                    tr.stats.ptt = arrivals[0]
-
-                # Sort the st by distance from quake
-                self.st.sort(keys=['distance'])
-
-
-                self.update_waveform_plot()
+    # def analyse_earthquake(self, event_obj):
+    #     # Get event catalogue
+    #     self.event_cat = self.ds.events
+    #     comp_list = ['*Z', '*N', '*E']
+    #
+    #
+    #     # Launch the custom station/component selection dialog
+    #     sel_dlg = selectionDialog(parent=self, sta_list=self.ds.waveforms.list())
+    #     if sel_dlg.exec_():
+    #         select_sta, bool_comp = sel_dlg.getSelected()
+    #         query_comp = list(itertools.compress(comp_list, bool_comp))
+    #
+    #         # Open up a new stream object
+    #         self.st = Stream()
+    #
+    #         # use the ifilter functionality to extract desired streams to visualize
+    #         for station in self.ds.ifilter(self.ds.q.station == map(lambda el: el.split('.')[1], select_sta),
+    #                                        self.ds.q.channel == query_comp,
+    #                                        self.ds.q.event == event_obj):
+    #             for filtered_id in station.list():
+    #                 if filtered_id == 'StationXML':
+    #                     continue
+    #                 self.st += station[filtered_id]
+    #
+    #         if self.st.__nonzero__():
+    #             print(self.st)
+    #             # Get quake origin info
+    #             origin_info = event_obj.preferred_origin() or event_obj.origins[0]
+    #
+    #             # Iterate through traces
+    #             for tr in self.st:
+    #                 # Run Java Script to highlight all selected stations in station view
+    #                 js_call = "highlightStation('{station}')".format(station=tr.stats.network + '.' +tr.stats.station)
+    #                 self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+    #
+    #
+    #                 # Get inventory for trace
+    #                 inv = self.ds.waveforms[tr.stats.network + '.' +tr.stats.station].StationXML
+    #                 sta_coords = inv.get_coordinates(tr.get_id())
+    #
+    #                 dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
+    #                                                 sta_coords['longitude'],
+    #                                                 origin_info.latitude,
+    #                                                 origin_info.longitude)
+    #                 dist_deg = kilometer2degrees(dist/1000.0)
+    #                 tt_model = TauPyModel(model='iasp91')
+    #                 arrivals = tt_model.get_travel_times(origin_info.depth/1000.0, dist_deg, ('P'))
+    #
+    #                 # Write info to trace header
+    #                 tr.stats.distance = dist
+    #                 tr.stats.ptt = arrivals[0]
+    #
+    #             # Sort the st by distance from quake
+    #             self.st.sort(keys=['distance'])
+    #
+    #
+    #             self.update_waveform_plot()
 
     def station_availability(self):
+
         # go through JSON entries and find all gaps save them into dictionary
         self.recording_gaps = {}
-        self.recording_overlaps = {}
         self.recording_intervals = {}
+        # self.recording_overlaps = {}
+
+        print(self.ds.auxiliary_data)
 
         print('_________________')
 
-        print("\nIterating through JSON entries to find data gaps")
-        print("This may take a while......")
+        print("\nUsing DataBase to find data gaps, overlaps and recording intervals")
+
+        station_list = self.ds.waveforms.list()
 
         # iterate through stations
-        for _i, station in enumerate(self.station_list):
+        for _i, station in enumerate(station_list):
+            stnxml = self.ds.waveforms[station].StationXML
+            # get the start recording interval
+            #  and get the end recording interval
+            try:
+                rec_start = UTCDateTime(stnxml[0][0].start_date).timestamp or \
+                            UTCDateTime(stnxml[0][0].creation_date).timestamp
+                rec_end = UTCDateTime(stnxml[0][0].end_date).timestamp or \
+                          UTCDateTime(stnxml[0][0].termination_date).timestamp
+            except AttributeError:
+                print("No start/end dates found in XML")
+                break
+
+            # get the channels for that station
+            xml_list = stnxml.select(channel="*Z").get_contents()['channels']
+
+            sta = str(xml_list[0]).split('.')[1]
+            chan = str(xml_list[0]).split('.')[3]
+
+            # the auxillary data hierarchy
+            data_type = "StationAvailability"
+            gaps_path = station.replace('.', '_') + '/DataGaps'
+            # ovlps_path = station.replace('.', '_') + '/DataOverlaps'
+            rec_int_path = station.replace('.', '_') + '/RecordingIntervals'
+
+            # check if there is already info in auxillary data
+            try:
+                aux_gaps = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["DataGaps"].data
+                aux_rec_ints = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["RecordingIntervals"].data
+            except KeyError:
+                # no gaps/interval info stored in auxillary data
+                pass
+            else:
+                print("Gaps and recording interval information already in ASDF Auxillary Data")
+                self.recording_intervals[station] = aux_rec_ints
+                self.recording_gaps[station] = aux_gaps
+
+                print(aux_gaps)
+                break
+
             print("\r Working on Station: " + station + ", " + str(_i + 1) + " of " + \
-            str(len(self.station_list)) + " Stations",)
+            str(len(station_list)) + " Stations",)
             sys.stdout.flush()
-            self.recording_gaps[station] = {}
-            self.recording_overlaps[station] = {}
-            self.recording_intervals[station] = {}
 
-            # store for previous end time for a particular component in dictionary
-            comp_endtime_dict = {}
-            gaps_no_dict = {}
-            ovlps_no_dict = {}
+            gaps_array = self.seisdb.get_recording_intervals(sta=sta, chan=chan)
 
-            # create new entry into recording gaps dict for each channel
-            for chan in self.channel_codes:
-                self.recording_gaps[station][chan] = []
-                self.recording_overlaps[station][chan] = []
-                self.recording_intervals[station][chan] = []
-                gaps_no_dict[chan] = 0
-                ovlps_no_dict[chan] = 0
+            self.recording_gaps[station] = gaps_array
+
+            temp_start_int = []
+            temp_end_int = []
+
+            gaps_no = len(gaps_array[0])\
+
+            prev_endtime = ''
+
+            if gaps_no == 0:
+                temp_start_int.append(rec_start)
+                temp_end_int.append(rec_end)
+            else:
+                # now populate the recording intervals dictionary
+                for _j, gap_entry in enumerate(gaps_array):
+                    print(gaps_array[_j])
+                    if _j == 0:
+                        # first interval
+                        # print(UTCDateTime(rec_start).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
+                        temp_start_int.append(rec_start)
+                        temp_end_int.append(gap_entry[0])
+
+                    elif _j == gaps_no - 1:
+                        # last interval
+                        # print(UTCDateTime(gap_entry['gap_end']).ctime(), UTCDateTime(rec_end).ctime())
+                        temp_start_int.append(gap_entry[1])
+                        temp_end_int.append(rec_end)
+
+                    else:
+                        # print(UTCDateTime(gaps_list[_j-1]['gap_end']).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
+                        temp_start_int.append(prev_endtime)
+                        temp_end_int.append(gap_entry[0])
+                    prev_endtime = gap_entry[1]
 
 
-            if os.path.splitext(self.db_filename)[1] == ".json":
-                # sort the dictionary by the starttime field
-                sorted_keys = sorted(self.network_dict, key=lambda x: self.network_dict[x]['starttime'])
+            rec_int_array = np.array([temp_start_int, temp_end_int])
+            self.recording_intervals[station] = rec_int_array
 
-                for key in sorted_keys:
-                    entry = self.network_dict[key]
-                    if (entry['station'] == station):
 
-                        # print(entry['ASDF_tag'])
-                        # print(UTCDateTime(entry['starttime']).ctime())
-                        # print(UTCDateTime(entry['endtime']).ctime())
-                        # print(key)
-                        # print(entry['path'])
+            # add the gaps into the auxillary data
+            self.ds.add_auxiliary_data(data_type=data_type, path=gaps_path, data=gaps_array,
+                                       parameters={"Description": "2D Numpy array with "
+                                                                  "UTCDateTime Timestamps for the start/end "
+                                                                  "of a gap interval"})
+            self.ds.add_auxiliary_data(data_type=data_type, path=rec_int_path, data=rec_int_array,
+                                       parameters={"Description": "2D Numpy array with "
+                                                                  "UTCDateTime Timestamps for the start/end "
+                                                                  "of a recording interval"})
 
-                        # if there is a previous timestamp in the dict then calculate diff tween the previous endtime and the
-                        # currently iterated starttime
-                        if entry['component'] in comp_endtime_dict.keys():
-                            """
-                            This is where the algorithm to analyse gaps/overlaps would go
-                            for now it is just a simple analysis to find large data gaps (corresponding to service intervals)
-                            """
 
-                            prev_endtime = comp_endtime_dict[entry['component']]
+            print(self.ds.auxiliary_data)
 
-                            diff = entry['starttime'] - prev_endtime
 
-                            # get large gap
-                            if diff > 1:
-                                gaps_no_dict[entry['component']] += 1
-                                self.recording_gaps[station][entry['component']].append({"gap_start": prev_endtime,
-                                                                                         "gap_end": entry['starttime']})
-                                # print(UTCDateTime(prev_endtime).ctime(), UTCDateTime(entry['starttime).ctime())
-                            # check if overalp
-                            elif diff < -1:
-                                ovlps_no_dict[entry['component']] += 1
-                                self.recording_overlaps[station][entry['component']].append(
-                                    {"ovlp_start": entry['starttime'],
-                                     "ovlp_end": prev_endtime})
 
-                            # add current iterate to dictionary
-                            comp_endtime_dict[entry['component']] = entry['endtime']
+        print("")
+        print("\nFinished calculating station recording intervals")
+        print("Wrote data into ASDF auxillary information" )
 
-                        else:
-                            # there is no component in dictionary (i.e first iteration for component)
-                            # add current iterate to dictionary
-                            comp_endtime_dict[entry['component']] = entry['endtime']
+        self.build_auxillary_tree_view()
+        print(self.recording_intervals)
 
-                            # # print("Found: ")
-                            # for chan in self.channel_codes:
-                            #     print("\tChannel: " + chan +" "+ str(gaps_no_dict[chan]) +
-                            #           " Gaps and " + str(ovlps_no_dict[chan]) + " Overlaps!")
+        print("running data avail")
 
-        self.calculate_recording_int()
+        self.data_avail_plot = DataAvailPlot(parent=self, sta_list=station_list,
+                                             chan_list=[chan],
+                                             rec_int_dict=self.recording_intervals)
 
 
 
@@ -1352,7 +1506,7 @@ class Window(QtGui.QMainWindow):
 
 def launch():
     # Automatically compile all ui files if they have been changed.
-    compile_and_import_ui_files()
+    # compile_and_import_ui_files()
 
     # Launch and open the window.
     app = QtGui.QApplication(sys.argv, QtGui.QApplication.GuiClient)
@@ -1370,6 +1524,7 @@ def launch():
     ret_val = app.exec_()
     window.__del__()
     os._exit(ret_val)
+
 
 
 if __name__ == "__main__":
