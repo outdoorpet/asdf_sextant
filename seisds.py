@@ -142,6 +142,8 @@ class SeisDB(object):
                         "new_network": self._indexed_np_array['net'][k]}
                     for k in _indexed_np_array_masked[0]}
 
+    def get_recording_intervals(self, sta):
+
 
 if __name__ == "__main__":
     print "Testing db access"

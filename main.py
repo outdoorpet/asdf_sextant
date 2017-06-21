@@ -233,6 +233,8 @@ class Window(QtGui.QMainWindow):
 
         self.ui.openASDF.triggered.connect(self.open_asdf_file)
         self.ui.openJSON_DB.triggered.connect(self.open_json_file)
+
+        self.ui.actionStation_Availability.triggered.connect(self.station_availability)
         # self.ui.bpfilter.triggered.connect(self.bpfilter)
 
         # Add right clickability to station view
@@ -1255,6 +1257,96 @@ class Window(QtGui.QMainWindow):
 
 
                 self.update_waveform_plot()
+
+    def station_availability(self):
+        # go through JSON entries and find all gaps save them into dictionary
+        self.recording_gaps = {}
+        self.recording_overlaps = {}
+        self.recording_intervals = {}
+
+        print('_________________')
+
+        print("\nIterating through JSON entries to find data gaps")
+        print("This may take a while......")
+
+        # iterate through stations
+        for _i, station in enumerate(self.station_list):
+            print("\r Working on Station: " + station + ", " + str(_i + 1) + " of " + \
+            str(len(self.station_list)) + " Stations",)
+            sys.stdout.flush()
+            self.recording_gaps[station] = {}
+            self.recording_overlaps[station] = {}
+            self.recording_intervals[station] = {}
+
+            # store for previous end time for a particular component in dictionary
+            comp_endtime_dict = {}
+            gaps_no_dict = {}
+            ovlps_no_dict = {}
+
+            # create new entry into recording gaps dict for each channel
+            for chan in self.channel_codes:
+                self.recording_gaps[station][chan] = []
+                self.recording_overlaps[station][chan] = []
+                self.recording_intervals[station][chan] = []
+                gaps_no_dict[chan] = 0
+                ovlps_no_dict[chan] = 0
+
+
+            if os.path.splitext(self.db_filename)[1] == ".json":
+                # sort the dictionary by the starttime field
+                sorted_keys = sorted(self.network_dict, key=lambda x: self.network_dict[x]['starttime'])
+
+                for key in sorted_keys:
+                    entry = self.network_dict[key]
+                    if (entry['station'] == station):
+
+                        # print(entry['ASDF_tag'])
+                        # print(UTCDateTime(entry['starttime']).ctime())
+                        # print(UTCDateTime(entry['endtime']).ctime())
+                        # print(key)
+                        # print(entry['path'])
+
+                        # if there is a previous timestamp in the dict then calculate diff tween the previous endtime and the
+                        # currently iterated starttime
+                        if entry['component'] in comp_endtime_dict.keys():
+                            """
+                            This is where the algorithm to analyse gaps/overlaps would go
+                            for now it is just a simple analysis to find large data gaps (corresponding to service intervals)
+                            """
+
+                            prev_endtime = comp_endtime_dict[entry['component']]
+
+                            diff = entry['starttime'] - prev_endtime
+
+                            # get large gap
+                            if diff > 1:
+                                gaps_no_dict[entry['component']] += 1
+                                self.recording_gaps[station][entry['component']].append({"gap_start": prev_endtime,
+                                                                                         "gap_end": entry['starttime']})
+                                # print(UTCDateTime(prev_endtime).ctime(), UTCDateTime(entry['starttime).ctime())
+                            # check if overalp
+                            elif diff < -1:
+                                ovlps_no_dict[entry['component']] += 1
+                                self.recording_overlaps[station][entry['component']].append(
+                                    {"ovlp_start": entry['starttime'],
+                                     "ovlp_end": prev_endtime})
+
+                            # add current iterate to dictionary
+                            comp_endtime_dict[entry['component']] = entry['endtime']
+
+                        else:
+                            # there is no component in dictionary (i.e first iteration for component)
+                            # add current iterate to dictionary
+                            comp_endtime_dict[entry['component']] = entry['endtime']
+
+                            # # print("Found: ")
+                            # for chan in self.channel_codes:
+                            #     print("\tChannel: " + chan +" "+ str(gaps_no_dict[chan]) +
+                            #           " Gaps and " + str(ovlps_no_dict[chan]) + " Overlaps!")
+
+        self.calculate_recording_int()
+
+
 
 
 
