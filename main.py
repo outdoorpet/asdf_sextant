@@ -18,31 +18,19 @@ import qdarkstyle
 
 import numpy as np
 
-from collections import defaultdict
-
-from glob import iglob
-import imp
-import inspect
 import itertools
 import os
 import sys
 import tempfile
-from os.path import join, exists
-
 import obspy.core.event
 import pyasdf
 from pyasdf.exceptions import ASDFValueError
 
 from obspy.core import UTCDateTime, Stream
-from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
-from obspy.taup import TauPyModel
-
+from obspy import read_events
 from DateAxisItem import DateAxisItem
 from seisds import SeisDB
 
-from sqlalchemy import create_engine, text, Column, Integer, String, or_, and_
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
 
 # load in Qt Designer UI files
 asdf_sextant_window_ui = "asdf_sextant_window.ui"
@@ -76,36 +64,6 @@ AUX_DATA_ITEM_TYPES = {
 # Default to antialiased drawing.
 pg.setConfigOptions(antialias=True, foreground=(200, 200, 200),
                     background=None)
-
-
-# def compile_and_import_ui_files():
-#     """
-#     Automatically compiles all .ui files found in the same directory as the
-#     application py file.
-#     They will have the same name as the .ui files just with a .py extension.
-#
-#     Needs to be defined in the same file as function loading the gui as it
-#     modifies the globals to be able to automatically import the created py-ui
-#     files. Its just very convenient.
-#     """
-#     directory = os.path.dirname(os.path.abspath(
-#         inspect.getfile(inspect.currentframe())))
-#     for filename in iglob(os.path.join(directory, '*.ui')):
-#         ui_file = filename
-#         py_ui_file = os.path.splitext(ui_file)[0] + os.path.extsep + 'py'
-#         if not os.path.exists(py_ui_file) or \
-#                 (os.path.getmtime(ui_file) >= os.path.getmtime(py_ui_file)):
-#             from PyQt4 import uic
-#             print("Compiling ui file: %s" % ui_file)
-#             with open(py_ui_file, 'w') as open_file:
-#                 uic.compileUi(ui_file, open_file)
-#         # Import the (compiled) file.
-#         try:
-#             import_name = os.path.splitext(os.path.basename(py_ui_file))[0]
-#             globals()[import_name] = imp.load_source(import_name, py_ui_file)
-#         except ImportError as e:
-#             print("Error importing %s" % py_ui_file)
-#             print(e.message)
 
 def sizeof_fmt(num):
     """
@@ -337,6 +295,7 @@ class Window(QtGui.QMainWindow):
 
         self.ui.openASDF.triggered.connect(self.open_asdf_file)
         self.ui.openJSON_DB.triggered.connect(self.open_json_file)
+        self.ui.openEQ_QuakeML.triggered.connect(self.open_EQ_cat)
 
         self.ui.actionStation_Availability.triggered.connect(self.station_availability)
         # self.ui.bpfilter.triggered.connect(self.bpfilter)
@@ -367,7 +326,12 @@ class Window(QtGui.QMainWindow):
             pass
 
     def closeEvent(self, QCloseEvent):
-        del self.ds
+        # necessary to ensure data is written into ASDF file
+        try:
+            del self.ds
+        except AttributeError:
+            # there is no loaded in ASDF data
+            pass
 
     def __connect_signal_and_slots(self):
         """
@@ -382,11 +346,16 @@ class Window(QtGui.QMainWindow):
     def changed_widget_focus(self):
         if QtGui.QApplication.focusWidget() == self.ui.graph:
             # Access the state dictionary and iterate through all stations in graph then highlight statins on web view
-            for station_id in self._state["station_id"]:
-                sta = station_id.split('.')[0] + '.' + station_id.split('.')[1]
-                # Run Java Script to highlight all selected stations in station view
-                js_call = "highlightStation('{station}')".format(station=sta)
-                self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+            try:
+                for station_id in self._state["station_id"]:
+                    sta = station_id.split('.')[0] + '.' + station_id.split('.')[1]
+                    # Run Java Script to highlight all selected stations in station view
+                    js_call = "highlightStation('{station}')".format(station=sta)
+                    self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+
+            except KeyError:
+                # there are no stations loaded in
+                pass
 
     def build_event_tree_view(self):
         if not hasattr(self, "ds") or not self.ds:
@@ -644,60 +613,6 @@ class Window(QtGui.QMainWindow):
         popup.exec_(self.ui.references_push_button.parentWidget().mapToGlobal(
                     self.ui.references_push_button.pos()))
 
-    # def create_asdf_sql(self, sta):
-    #     # Function to separate the waveform string into seperate fields
-    #     def waveform_sep(ws):
-    #         a = ws.split('__')
-    #         starttime = int(UTCDateTime(a[1].encode('ascii')).timestamp)
-    #         endtime = int(UTCDateTime(a[2].encode('ascii')).timestamp)
-    #
-    #         # Returns: (station_id, starttime, endtime, waveform_tag)
-    #         return (ws.encode('ascii'), a[0].encode('ascii'), starttime, endtime, a[3].encode('ascii'))
-    #
-    #     # Get the SQL file for station
-    #     SQL_filename = r""+os.path.dirname(self.filename)+ '/' + str(sta.split('.')[1]) + '.db'
-    #
-    #     check_SQL = exists(SQL_filename)
-    #
-    #     if check_SQL:
-    #         return
-    #     # need to create SQL database
-    #     elif not check_SQL:
-    #         # Initialize (open/create) the sqlalchemy sqlite engine
-    #         engine = create_engine('sqlite:///' + SQL_filename)
-    #         Session = sessionmaker()
-    #
-    #         # Get list of all waveforms for station
-    #         waveforms_list = self.ds.waveforms[str(sta)].list()
-    #         #remove the station XML file
-    #         waveforms_list.remove('StationXML')
-    #
-    #         # Create all tables in the engine
-    #         Base.metadata.create_all(engine)
-    #
-    #         # Initiate a session with the SQL database so that we can add data to it
-    #         Session.configure(bind=engine)
-    #         session = Session()
-    #
-    #         progressDialog = QtGui.QProgressDialog("Building SQL Library for Station {0}".format(str(sta)),
-    #                                                "Cancel", 0, len(waveforms_list))
-    #
-    #         # go through the waveforms (ignore stationxml file)
-    #         for _i, sta_wave in enumerate(waveforms_list):
-    #             progressDialog.setValue(_i)
-    #
-    #             # The ASDF formatted waveform name for SQL [full_id, station_id, starttime, endtime, tag]
-    #             waveform_info = waveform_sep(sta_wave)
-    #
-    #             # create new SQL entry
-    #             new_wave_SQL = Waveforms(full_id=waveform_info[0], station_id=waveform_info[1],
-    #                                      starttime=waveform_info[2],
-    #                                      endtime=waveform_info[3], tag=waveform_info[4])
-    #
-    #             # Add the waveform info to the session
-    #             session.add(new_wave_SQL)
-    #             session.commit()
-
     def open_json_file(self):
         self.db_filename = str(QtGui.QFileDialog.getOpenFileName(
             parent=self, caption="Choose JSON Database File",
@@ -719,7 +634,7 @@ class Window(QtGui.QMainWindow):
         Fill the station tree widget upon opening a new file.
         """
         self.asdf_filename = str(QtGui.QFileDialog.getOpenFileName(
-            parent=self, caption="Choose File",
+            parent=self, caption="Choose ASDF File",
             directory=os.path.expanduser("~"),
             filter="ASDF files (*.h5)"))
         if not self.asdf_filename:
@@ -759,6 +674,22 @@ class Window(QtGui.QMainWindow):
         w.show()
         sb.show()
         sb.reformat()
+
+    def open_EQ_cat(self):
+        self.cat_filename = str(QtGui.QFileDialog.getOpenFileName(
+            parent=self, caption="Choose Earthquake QuakeML File",
+            directory=os.path.expanduser("~"),
+            filter="QuakeML files (*.xml)"))
+        if not self.cat_filename:
+            return
+
+        cat = read_events(self.cat_filename)
+
+        print(cat)
+
+        # add into new ASDF file
+        # TODO: Impliment the same multi ASDF file functionality as QC_Events_ASDF
+        # open the catalogue in a dataframe view under events tab
 
     def on_detrend_and_demean_check_box_stateChanged(self, state):
         self.update_waveform_plot()
@@ -869,8 +800,8 @@ class Window(QtGui.QMainWindow):
         self.new_start_time = starttime - (delta_time - overlap_time)
         self.new_end_time = starttime + overlap_time
 
-        self.extract_from_continuous(True, st_ids=self._state["station_id"],
-                                     st_tags=self._state["station_tag"])
+        self.extract_waveform_frm_ASDF(True, st_ids=self._state["station_id"],
+                                       st_tags=self._state["station_tag"])
 
     def on_next_interval_push_button_released(self):
         # Get start and end time of next interval with 10% overlap
@@ -883,8 +814,8 @@ class Window(QtGui.QMainWindow):
         self.new_start_time = endtime - (overlap_time)
         self.new_end_time = endtime + (delta_time - overlap_time)
 
-        self.extract_from_continuous(True, st_ids = self._state["station_id"],
-                                     st_tags = self._state["station_tag"])
+        self.extract_waveform_frm_ASDF(True, st_ids = self._state["station_id"],
+                                       st_tags = self._state["station_tag"])
 
     def reset_view(self):
         self._state["waveform_plots"][0].setXRange(
@@ -943,6 +874,7 @@ class Window(QtGui.QMainWindow):
         if t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
             self.net_item_menu = QtGui.QMenu(self)
             ext_menu = QtGui.QMenu('Select NSLC', self)
+            # TODO: station, channel, location selection for plotting
         # elif t == STATION_VIEW_ITEM_TYPES["STATIONXML"]:
         #     pass
         # elif t == STATION_VIEW_ITEM_TYPES["WAVEFORM"]:
@@ -966,12 +898,16 @@ class Window(QtGui.QMainWindow):
             for wave_tag in wave_tag_list:
                 action = QtGui.QAction(wave_tag, self)
                 # Connect the triggered menu object to a function passing an extra variable
-                action.triggered.connect(lambda: self.extract_from_continuous(False, sta=station, wave_tag=wave_tag))
+                action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False, sta=station, wave_tag=wave_tag))
                 ext_menu.addAction(action)
 
             self.sta_item_menu.addMenu(ext_menu)
 
             self.action = self.sta_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
+
+        elif t == STATION_VIEW_ITEM_TYPES["CHANNEL"]:
+            # TODO: plotting single channel waveform
+            pass
 
     def on_event_tree_widget_itemClicked(self, item, column):
         t = item.type()
@@ -1213,14 +1149,13 @@ class Window(QtGui.QMainWindow):
 
         return(st)
 
-    def extract_from_continuous(self, override, **kwargs):
+    def extract_waveform_frm_ASDF(self, override, **kwargs):
         # Open a new st object
         self.st = Stream()
 
         # If override flag then we are calling this
         # method by using prev/next interval buttons
         if override:
-            print(kwargs["st_ids"])
             net = str(kwargs["st_ids"][0]).split('.')[0]
             sta = str(kwargs["st_ids"][0]).split('.')[1]
             stnxml = self.ds.waveforms[net+'.'+sta].StationXML
@@ -1294,24 +1229,30 @@ class Window(QtGui.QMainWindow):
                     # free memory
                     temp_tr = None
 
-        if self.st.__nonzero__():
-            # Attempt to merge all traces with matching ID'S in place
-            print('')
-            print('Merging Traces from %s Stations....' % len(self.st))
-            self.st.merge()
-            print('\nTrimming Traces to specified time interval....')
-            self.st.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
-            self.update_waveform_plot()
-        else:
-            msg = QtGui.QMessageBox()
-            msg.setIcon(QtGui.QMessageBox.Critical)
-            msg.setText("No Data for Requested Time Interval")
-            msg.setDetailedText("There are no waveforms to display for selected time interval:"
-                                "\nStart Time = "+str(UTCDateTime(interval_tuple[0],precision=0))+
-                                "\nEnd Time =   "+str(UTCDateTime(interval_tuple[1],precision=0)))
-            msg.setWindowTitle("Extract Time Error")
-            msg.setStandardButtons(QtGui.QMessageBox.Ok)
-            msg.exec_()
+        try:
+
+            if self.st.__nonzero__():
+                # Attempt to merge all traces with matching ID'S in place
+                print('')
+                print('Merging Traces from %s Stations....' % len(self.st))
+                self.st.merge()
+                print('\nTrimming Traces to specified time interval....')
+                self.st.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
+                self.update_waveform_plot()
+            else:
+                msg = QtGui.QMessageBox()
+                msg.setIcon(QtGui.QMessageBox.Critical)
+                msg.setText("No Data for Requested Time Interval")
+                msg.setDetailedText("There are no waveforms to display for selected time interval:"
+                                    "\nStart Time = "+str(UTCDateTime(interval_tuple[0],precision=0))+
+                                    "\nEnd Time =   "+str(UTCDateTime(interval_tuple[1],precision=0)))
+                msg.setWindowTitle("Extract Time Error")
+                msg.setStandardButtons(QtGui.QMessageBox.Ok)
+                msg.exec_()
+
+        except UnboundLocalError:
+            # the atation selection dialog box was cancelled
+            pass
 
     # def analyse_earthquake(self, event_obj):
     #     # Get event catalogue
@@ -1420,12 +1361,12 @@ class Window(QtGui.QMainWindow):
                 # no gaps/interval info stored in auxillary data
                 pass
             else:
-                print("Gaps and recording interval information already in ASDF Auxillary Data")
+                print("Gaps and recording interval information already in "
+                      "ASDF Auxillary Data for Station: %s ....." % station)
                 self.recording_intervals[station] = aux_rec_ints
                 self.recording_gaps[station] = aux_gaps
 
-                print(aux_gaps)
-                break
+                continue
 
             print("\r Working on Station: " + station + ", " + str(_i + 1) + " of " + \
             str(len(station_list)) + " Stations",)
@@ -1482,11 +1423,6 @@ class Window(QtGui.QMainWindow):
                                                                   "UTCDateTime Timestamps for the start/end "
                                                                   "of a recording interval"})
 
-
-            print(self.ds.auxiliary_data)
-
-
-
         print("")
         print("\nFinished calculating station recording intervals")
         print("Wrote data into ASDF auxillary information" )
@@ -1499,7 +1435,6 @@ class Window(QtGui.QMainWindow):
         self.data_avail_plot = DataAvailPlot(parent=self, sta_list=station_list,
                                              chan_list=[chan],
                                              rec_int_dict=self.recording_intervals)
-
 
 
 

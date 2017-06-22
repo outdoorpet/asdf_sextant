@@ -404,7 +404,7 @@
     </property>
     <addaction name="openASDF"/>
     <addaction name="openJSON_DB"/>
-    <addaction name="actionOpen_EQ_QuakeML"/>
+    <addaction name="openEQ_QuakeML"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
     <property name="title">
@@ -445,7 +445,7 @@
     <string>Station Availability</string>
    </property>
   </action>
-  <action name="actionOpen_EQ_QuakeML">
+  <action name="openEQ_QuakeML">
    <property name="text">
     <string>Open EQ QuakeML</string>
    </property>
