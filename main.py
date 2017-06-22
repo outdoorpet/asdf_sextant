@@ -18,6 +18,7 @@ import qdarkstyle
 
 import numpy as np
 
+import glob
 import itertools
 import os
 import sys
@@ -26,6 +27,7 @@ import obspy.core.event
 import pyasdf
 from pyasdf.exceptions import ASDFValueError
 
+from os.path import join, dirname, basename
 from obspy.core import UTCDateTime, Stream
 from obspy import read_events
 from DateAxisItem import DateAxisItem
@@ -293,8 +295,11 @@ class Window(QtGui.QMainWindow):
 
         self._state = {}
 
+        # set up dictionary for different ASDF files and associated attributes/items
+        self.ASDF_accessor = {}
+
         self.ui.openASDF.triggered.connect(self.open_asdf_file)
-        self.ui.openJSON_DB.triggered.connect(self.open_json_file)
+        # self.ui.openJSON_DB.triggered.connect(self.open_json_file)
         self.ui.openEQ_QuakeML.triggered.connect(self.open_EQ_cat)
 
         self.ui.actionStation_Availability.triggered.connect(self.station_availability)
@@ -328,7 +333,9 @@ class Window(QtGui.QMainWindow):
     def closeEvent(self, QCloseEvent):
         # necessary to ensure data is written into ASDF file
         try:
-            del self.ds
+            # close all datasets
+            for value in self.ASDF_accessor.values():
+                del value["ds"]
         except AttributeError:
             # there is no loaded in ASDF data
             pass
@@ -342,6 +349,13 @@ class Window(QtGui.QMainWindow):
             self.on_station_view_itemEntered)
         self.ui.station_view.itemExited.connect(
             self.on_station_view_itemExited)
+
+    def change_active_ASDF(self, ds_id):
+        self.ds = self.ASDF_accessor[ds_id]["ds"]
+        self.db = self.ASDF_accessor[ds_id]["db"]
+        self.ds_id = ds_id
+
+        self.read_ASDF_info()
 
     def changed_widget_focus(self):
         if QtGui.QApplication.focusWidget() == self.ui.graph:
@@ -423,9 +437,22 @@ class Window(QtGui.QMainWindow):
     def build_station_view_list(self):
         if not hasattr(self, "ds") or not self.ds:
             return
-        self.ui.station_view.clear()
 
         items = []
+
+        # persistent list for all stations within ASDF file
+        sta_list = []
+        # set with unique channel codes in survey
+        channel_codes_set = set()
+
+        filename_item = QtGui.QTreeWidgetItem([self.ds_id],
+                                              type=STATION_VIEW_ITEM_TYPES["FILE"])
+
+        # add the tree item for the ASDF file into accessor dict as well as the default background
+        self.ASDF_accessor[self.ds_id]['file_tree_item'] = filename_item
+        # self.ASDF_accessor[self.ds_id]['def_bkgrnd_col'] = filename_item.background(0)
+
+        self.on_station_view_itemClicked(filename_item)
 
         # Iterate through station accessors in ASDF file
         for key, group in itertools.groupby(
@@ -435,18 +462,17 @@ class Window(QtGui.QMainWindow):
                 [key],
                 type=STATION_VIEW_ITEM_TYPES["NETWORK"])
             group = sorted(group, key=lambda x: x._station_name)
-
-            # set with unique channel codes for station
-            channel_codes_set = set()
-
             # Add all children stations.
             for station in sorted(group, key=lambda x: x._station_name):
                 station_item = QtGui.QTreeWidgetItem([
                     station._station_name.split(".")[-1]],
                     type=STATION_VIEW_ITEM_TYPES["STATION"])
 
+                sta_list.append(station._station_name)
+
                 # get stationxml (to channel level) for station
                 station_inv = station.StationXML[0][0]
+                # print(station_inv)
 
                 # add info children
                 station_children = [
@@ -497,9 +523,14 @@ class Window(QtGui.QMainWindow):
                     station_item.addChild(channel_item)
 
                 network_item.addChild(station_item)
-        items.append(network_item)
+            filename_item.addChild(network_item)
+        items.append(filename_item)
 
         self.ui.station_view.insertTopLevelItems(0, items)
+
+        # make the channel code set into list and make persistant
+        self.ASDF_accessor[self.ds_id]['channel_codes'] = list(channel_codes_set)
+        self.ASDF_accessor[self.ds_id]['sta_list'] = sta_list
 
     def build_auxillary_tree_view(self):
         self.ui.auxiliary_data_tree_view.clear()
@@ -613,34 +644,7 @@ class Window(QtGui.QMainWindow):
         popup.exec_(self.ui.references_push_button.parentWidget().mapToGlobal(
                     self.ui.references_push_button.pos()))
 
-    def open_json_file(self):
-        self.db_filename = str(QtGui.QFileDialog.getOpenFileName(
-            parent=self, caption="Choose JSON Database File",
-            directory=os.path.expanduser(os.path.dirname(self.asdf_filename)),
-            filter="JSON Database File (*.json)"))
-        if not self.db_filename:
-            return
-
-        print('')
-        print("Initializing Database..")
-
-        # create the seismic database
-        self.seisdb = SeisDB(json_file=self.db_filename)
-
-        print("Seismic Database Initilized!")
-
-    def open_asdf_file(self):
-        """
-        Fill the station tree widget upon opening a new file.
-        """
-        self.asdf_filename = str(QtGui.QFileDialog.getOpenFileName(
-            parent=self, caption="Choose ASDF File",
-            directory=os.path.expanduser("~"),
-            filter="ASDF files (*.h5)"))
-        if not self.asdf_filename:
-            return
-
-        self.ds = pyasdf.ASDFDataSet(self.asdf_filename)
+    def read_ASDF_info(self):
 
         for station_id, coordinates in self.ds.get_all_coordinates().items():
             if not coordinates:
@@ -651,7 +655,7 @@ class Window(QtGui.QMainWindow):
                                latitude=coordinates["latitude"],
                                longitude=coordinates["longitude"]))
 
-        self.build_station_view_list()
+
         self.build_event_tree_view()
 
         # Add all the provenance items
@@ -674,6 +678,56 @@ class Window(QtGui.QMainWindow):
         w.show()
         sb.show()
         sb.reformat()
+
+    def open_json_file(self, asdf_file):
+        # automatically get associated JSON database file if it exists
+        db_file = glob.glob(join(dirname(asdf_file), '*.json'))
+
+        if not len(db_file) == 0:
+
+            print('')
+            print("Initializing Database..")
+
+            # create the seismic database
+            seisdb = SeisDB(json_file=db_file[0])
+
+            # add it to the asdf accessor
+            self.ASDF_accessor[os.path.basename(asdf_file)]["db"] = seisdb
+
+            print("Seismic Database Initilized!")
+
+        else:
+            # create a JSON database for the ASDF file
+            # TODO: write JSON db build
+            pass
+
+    def open_asdf_file(self):
+        """
+        Fill the station tree widget upon opening a new file.
+        """
+        asdf_file = str(QtGui.QFileDialog.getOpenFileName(
+            parent=self, caption="Choose ASDF File",
+            directory=os.path.expanduser("~"),
+            filter="ASDF files (*.h5)"))
+        if not asdf_file:
+            return
+
+        asdf_filename = basename(asdf_file)
+
+        ds = pyasdf.ASDFDataSet(asdf_file)
+
+        # add the asdf filename as key and the dataset into the file accessor
+        self.ASDF_accessor[asdf_filename] = {"ds": ds}
+
+        # open the associated JSON database if it exists
+        self.open_json_file(asdf_file)
+
+        # call the function to get the currently selected db and ds
+        self.change_active_ASDF(asdf_filename)
+
+        self.build_station_view_list()
+
+        # self.read_ASDF_info()
 
     def open_EQ_cat(self):
         self.cat_filename = str(QtGui.QFileDialog.getOpenFileName(
@@ -835,28 +889,61 @@ class Window(QtGui.QMainWindow):
 
         self.ui.provenance_graphics_view.open_file(self._tempfile)
 
-    def on_station_view_itemClicked(self, item, column):
+    def on_station_view_itemClicked(self, item):
         t = item.type()
 
-        def get_station(item):
-            station = item.text(0)
-            if "." not in station:
-                station = item.parent().text(0) + "." + station
+        # TODO: fix get station etc with new parent being the filename
+        def get_station(item, parent=True):
+            if parent:
+                station = str(item.parent().text(0))
+                if "." not in station:
+                    station = item.parent().parent().text(0) + "." + station
+            else:
+                station = item.text(0)
+                if "." not in station:
+                    station = item.parent().text(0) + "." + station
             return station
 
-        if t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
-            pass
+        def select_file(item):
+            # change the selected file
+            self.change_active_ASDF(item)
+            for value in self.ASDF_accessor.values():
+                # set the color of inactive files to White - default background color
+                # value['file_tree_item'].setBackgroundColor(0, QtGui.QColor(255,255,255,0))
+                # also disable other items
+                value['file_tree_item'].setDisabled(True)
+
+            # set the active file to semi-transparent green and enabled
+            self.ASDF_accessor[self.ds_id]['file_tree_item'].setDisabled(False)
+            # self.ASDF_accessor[self.ds_id]['file_tree_item'].setBackgroundColor(0, QtGui.QColor(0,0,255,100))
+
+        if t == STATION_VIEW_ITEM_TYPES["FILE"]:
+            select_file(str(item.text(0)))
+        elif t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
+            select_file(str(item.text(0)))
+            network = item.text(0)
+            js_call = "highlightNetwork('{network}')".format(network=network)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
         elif t == STATION_VIEW_ITEM_TYPES["STATION"]:
+            select_file(str(item.text(0)))
+            station = get_station(item, parent=False)
+            js_call = "highlightStation('{station}')".format(station=station)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+        elif t == STATION_VIEW_ITEM_TYPES["CHANNEL"]:
+            select_file(str(item.text(0)))
             station = get_station(item)
-        # elif t == STATION_VIEW_ITEM_TYPES["STATIONXML"]:
-        #     station = get_station(item.parent())
-        #     self.ds.waveforms[station].StationXML.plot()#plot_response(0.001)
-        # elif t == STATION_VIEW_ITEM_TYPES["WAVEFORM"]:
-        #     station = get_station(item.parent())
-        #     # self._state["current_station_object"] = self.ds.waveforms[station]
-        #     # self._state["current_waveform_tag"] = item.text(0)
-        #     # self.st = self.ds.waveforms[station][str(item.text(0))]
-        #     # self.update_waveform_plot()
+            js_call = "highlightStation('{station}')".format(station=station)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+        elif t == STATION_VIEW_ITEM_TYPES["CHAN_INFO"]:
+            select_file(str(item.text(0)))
+            station = get_station(item)
+            js_call = "highlightStation('{station}')".format(station=station)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+        elif t == STATION_VIEW_ITEM_TYPES["STN_INFO"]:
+            select_file(str(item.text(0)))
+            station = get_station(item)
+            js_call = "highlightStation('{station}')".format(station=station)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
         else:
             pass
 
@@ -1096,6 +1183,7 @@ class Window(QtGui.QMainWindow):
     def on_station_view_itemEntered(self, item):
         t = item.type()
 
+        # TODO: fix get station etc with new parent being the filename
         def get_station(item, parent=True):
             if parent:
                 station = str(item.parent().text(0))
@@ -1107,7 +1195,9 @@ class Window(QtGui.QMainWindow):
                     station = item.parent().text(0) + "." + station
             return station
 
-        if t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
+        if t == STATION_VIEW_ITEM_TYPES["FILE"]:
+            pass
+        elif t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
             network = item.text(0)
             js_call = "highlightNetwork('{network}')".format(network=network)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
