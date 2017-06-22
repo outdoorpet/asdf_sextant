@@ -184,7 +184,7 @@ class DataAvailPlot(QtGui.QDialog):
 
             # iterate through stations
             for stn_key, rec_array in self.rec_int_dict.iteritems():
-                print(rec_array)
+                # print(rec_array)
 
                 if not stn_key in select_sta:
                     continue
@@ -1378,7 +1378,7 @@ class Window(QtGui.QMainWindow):
         self.recording_intervals = {}
         # self.recording_overlaps = {}
 
-        print(self.ds.auxiliary_data)
+        # print(self.ds.auxiliary_data)
 
         print('_________________')
 
@@ -1448,7 +1448,7 @@ class Window(QtGui.QMainWindow):
             else:
                 # now populate the recording intervals dictionary
                 for _j, gap_entry in enumerate(gaps_array):
-                    print(gaps_array[_j])
+                    # print(gaps_array[_j])
                     if _j == 0:
                         # first interval
                         # print(UTCDateTime(rec_start).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
@@ -1492,9 +1492,9 @@ class Window(QtGui.QMainWindow):
         print("Wrote data into ASDF auxillary information" )
 
         self.build_auxillary_tree_view()
-        print(self.recording_intervals)
+        # print(self.recording_intervals)
 
-        print("running data avail")
+        # print("running data avail")
 
         self.data_avail_plot = DataAvailPlot(parent=self, sta_list=station_list,
                                              chan_list=[chan],

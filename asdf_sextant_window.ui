@@ -404,6 +404,7 @@
     </property>
     <addaction name="openASDF"/>
     <addaction name="openJSON_DB"/>
+    <addaction name="actionOpen_EQ_QuakeML"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
     <property name="title">
@@ -415,6 +416,7 @@
      <string>Tools</string>
     </property>
     <addaction name="actionFilter"/>
+    <addaction name="actionStation_Availability"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -436,6 +438,16 @@
   <action name="openJSON_DB">
    <property name="text">
     <string>Open JSON DB</string>
+   </property>
+  </action>
+  <action name="actionStation_Availability">
+   <property name="text">
+    <string>Station Availability</string>
+   </property>
+  </action>
+  <action name="actionOpen_EQ_QuakeML">
+   <property name="text">
+    <string>Open EQ QuakeML</string>
    </property>
   </action>
  </widget>
