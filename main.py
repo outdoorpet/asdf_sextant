@@ -904,9 +904,9 @@ class Window(QtGui.QMainWindow):
                     station = item.parent().text(0) + "." + station
             return station
 
-        def select_file(item):
+        def select_file(ds_id):
             # change the selected file
-            self.change_active_ASDF(item)
+            self.change_active_ASDF(ds_id)
             for value in self.ASDF_accessor.values():
                 # set the color of inactive files to White - default background color
                 # value['file_tree_item'].setBackgroundColor(0, QtGui.QColor(255,255,255,0))
@@ -920,27 +920,27 @@ class Window(QtGui.QMainWindow):
         if t == STATION_VIEW_ITEM_TYPES["FILE"]:
             select_file(str(item.text(0)))
         elif t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
-            select_file(str(item.text(0)))
+            select_file(str(item.parent().text(0)))
             network = item.text(0)
             js_call = "highlightNetwork('{network}')".format(network=network)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
         elif t == STATION_VIEW_ITEM_TYPES["STATION"]:
-            select_file(str(item.text(0)))
+            select_file(str(item.parent().parent().text(0)))
             station = get_station(item, parent=False)
             js_call = "highlightStation('{station}')".format(station=station)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
         elif t == STATION_VIEW_ITEM_TYPES["CHANNEL"]:
-            select_file(str(item.text(0)))
+            select_file(str(item.parent().parent().parent().text(0)))
             station = get_station(item)
             js_call = "highlightStation('{station}')".format(station=station)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
         elif t == STATION_VIEW_ITEM_TYPES["CHAN_INFO"]:
-            select_file(str(item.text(0)))
+            select_file(str(item.parent().parent().parent().parent().text(0)))
             station = get_station(item)
             js_call = "highlightStation('{station}')".format(station=station)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
         elif t == STATION_VIEW_ITEM_TYPES["STN_INFO"]:
-            select_file(str(item.text(0)))
+            select_file(str(item.parent().parent().parent().text(0)))
             station = get_station(item)
             js_call = "highlightStation('{station}')".format(station=station)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)

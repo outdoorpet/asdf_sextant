@@ -403,7 +403,6 @@
      <string>File</string>
     </property>
     <addaction name="openASDF"/>
-    <addaction name="openJSON_DB"/>
     <addaction name="openEQ_QuakeML"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
