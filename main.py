@@ -164,18 +164,17 @@ class DataAvailPlot(QtGui.QDialog):
             self.plot.addItem(err)
 
 
-class timeDialog(QtGui.QDialog):
-    def __init__(self, parent=None, ph_start=None, ph_end=None):
-        QtGui.QDialog.__init__(self, parent)
-        self.timeui = Ui_ExtractTimeDialog()
-        self.timeui.setupUi(self)
-
-        self.timeui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
-        self.timeui.endtime.setDateTime(QtCore.QDateTime.fromString(ph_end, "yyyy-MM-ddThh:mm:ss"))
-
-    def getValues(self):
-        return (UTCDateTime(self.timeui.starttime.dateTime().toPyDateTime()),
-                UTCDateTime(self.timeui.endtime.dateTime().toPyDateTime()))
+# class timeDialog(QtGui.QDialog):
+#     def __init__(self, parent=None, ):
+#         QtGui.QDialog.__init__(self, parent)
+#         self.timeui = Ui_ExtractTimeDialog()
+#         self.timeui.setupUi(self)
+#
+#
+#
+#     def getValues(self):
+#         return (UTCDateTime(self.timeui.starttime.dateTime().toPyDateTime()),
+#                 UTCDateTime(self.timeui.endtime.dateTime().toPyDateTime()))
 
 
 class selectionDialog(QtGui.QDialog):
@@ -185,7 +184,7 @@ class selectionDialog(QtGui.QDialog):
     http://stackoverflow.com/questions/35611199/creating-a-toggling-check-all-checkbox-for-a-listview
     '''
 
-    def __init__(self, parent=None, sta_list=None, chan_list=None):
+    def __init__(self, parent=None, net_list=None, sta_list=None, chan_list=None, tags_list=None, ph_start=None, ph_end=None):
         QtGui.QDialog.__init__(self, parent)
         self.selui = Ui_SelectDialog()
         self.selui.setupUi(self)
@@ -193,9 +192,25 @@ class selectionDialog(QtGui.QDialog):
 
         # Set all check box to checked
         # self.selui.check_all.setChecked(True)
+
+        self.selui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
+        self.selui.endtime.setDateTime(QtCore.QDateTime.fromString(ph_end, "yyyy-MM-ddThh:mm:ss"))
+
         self.selui.check_all.clicked.connect(self.selectAllCheckChanged)
 
-        # add stations to station select items
+        # -------- add networks to network select items
+        self.net_model = QtGui.QStandardItemModel(self.selui.NetListView)
+
+        self.net_list = net_list
+        for net in self.net_list:
+            item = QtGui.QStandardItem(net)
+            item.setCheckable(True)
+
+            self.net_model.appendRow(item)
+
+        self.selui.NetListView.setModel(self.net_model)
+
+        # -------- add stations to station select items
         self.sta_model = QtGui.QStandardItemModel(self.selui.StaListView)
 
         self.sta_list = sta_list
@@ -209,7 +224,7 @@ class selectionDialog(QtGui.QDialog):
         # connect to method to update stae of select all checkbox
         self.selui.StaListView.clicked.connect(self.listviewCheckChanged)
 
-        # add channels to channel select items
+        # -------- add channels to channel select items
         self.chan_model = QtGui.QStandardItemModel(self.selui.ChanListView)
 
         self.chan_list = chan_list
@@ -220,6 +235,18 @@ class selectionDialog(QtGui.QDialog):
             self.chan_model.appendRow(item)
 
         self.selui.ChanListView.setModel(self.chan_model)
+
+        # -------- add ASDF tags to tags select items
+        self.tags_model = QtGui.QStandardItemModel(self.selui.TagsListView)
+
+        self.tags_list = tags_list
+        for tags in self.tags_list:
+            item = QtGui.QStandardItem(tags)
+            item.setCheckable(True)
+
+            self.tags_model.appendRow(item)
+
+        self.selui.TagsListView.setModel(self.tags_model)
 
     def selectAllCheckChanged(self):
         ''' updates the listview based on select all checkbox '''
@@ -248,8 +275,15 @@ class selectionDialog(QtGui.QDialog):
             self.selui.check_all.setCheckState(QtCore.Qt.Unchecked)
 
     def getSelected(self):
+        select_networks = []
         select_stations = []
         select_channels = []
+        select_tags = []
+        i = 0
+        while self.net_model.item(i):
+            if self.net_model.item(i).checkState():
+                select_networks.append(str(self.net_model.item(i).text()))
+            i += 1
         i = 0
         while self.sta_model.item(i):
             if self.sta_model.item(i).checkState():
@@ -260,9 +294,16 @@ class selectionDialog(QtGui.QDialog):
             if self.chan_model.item(i).checkState():
                 select_channels.append(str(self.chan_model.item(i).text()))
             i += 1
+        i = 0
+        while self.tags_model.item(i):
+            if self.tags_model.item(i).checkState():
+                select_tags.append(str(self.tags_model.item(i).text()))
+            i += 1
 
         # Return Selected stations and selected channels
-        return (select_stations, select_channels)
+        return (select_networks, select_stations, select_channels, select_tags,
+                UTCDateTime(self.selui.starttime.dateTime().toPyDateTime()),
+                UTCDateTime(self.selui.endtime.dateTime().toPyDateTime()))
 
 
 class Window(QtGui.QMainWindow):
@@ -967,18 +1008,39 @@ class Window(QtGui.QMainWindow):
             return station
 
         if t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
-            net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
-            chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
-            tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
+            net = str(item.text(0))
 
+            # get the start and end date of network
+            # we need to get a station that is part of teh network we are after and then get StationXML
+            for station in self.ds.ifilter(self.ds.q.network == net):
+                inv = station.StationXML
+                break
+
+            net_st = inv[0].start_date
+            net_et = inv[0].end_date
+
+            net_list = [net]
+            net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
             # create station list with just station names without network code
             sta_list = [x.split('.')[1] for x in net_sta_list]
 
+            chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
+            tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
+
+
+
             self.net_item_menu = QtGui.QMenu(self)
             select_action = QtGui.QAction('Select NSCL', self)
-            select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False, sta_list=sta_list, chan_list=chan_list))
-            # TODO: station, channel, location selection for plotting
-            select_action = self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
+            select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False,
+                                                                                   net_list=net_list,
+                                                                                   sta_list=sta_list,
+                                                                                   chan_list=chan_list,
+                                                                                   tags_list=tags_list,
+                                                                                   ph_st=str(net_st).split('.')[0],
+                                                                                   ph_et=str(net_st + 60*60).split('.')[0]))
+
+            self.net_item_menu.addAction(select_action)
+            self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
 
         elif t == STATION_VIEW_ITEM_TYPES["STATION"]:
             station = get_station(item)
@@ -1241,8 +1303,12 @@ class Window(QtGui.QMainWindow):
         # Open a new st object
         self.st = Stream()
 
+        net_list = kwargs['net_list']
         sta_list = kwargs['sta_list']
         chan_list = kwargs['chan_list']
+        tags_list = kwargs['tags_list']
+        ph_st = kwargs["ph_st"]
+        ph_et = kwargs["ph_et"]
 
         # If override flag then we are calling this
         # method by using prev/next interval buttons
@@ -1284,26 +1350,16 @@ class Window(QtGui.QMainWindow):
         elif not override:
 
             # now call station and channel selection dialog box
-            sel_dlg = selectionDialog(parent=self, sta_list=sta_list, chan_list=chan_list)
+            sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
+                                      tags_list=tags_list, ph_start=ph_st, ph_end=ph_et)
             if sel_dlg.exec_():
-                select_sta, select_comp = sel_dlg.getSelected()
+                select_net, select_sta, select_comp, select_tags, st, et = sel_dlg.getSelected()
+                print(select_net)
+                print(select_sta)
+                print(select_comp)
+                print(select_tags)
 
-
-            stnxml = self.ds.waveforms[kwargs['sta']].StationXML
-            # get the channels for that station
-            xml_list = stnxml.get_contents()['channels']
-            rec_start = stnxml[0][0].start_date
-
-            chan_list = []
-
-            for id in xml_list:
-                chan = id.split('.')[-1]
-                chan_list.append(str(chan))
-            # Launch the custom extract time dialog
-            dlg = timeDialog(self, ph_start=str(rec_start).split('.')[0], ph_end=str(rec_start + 60*60).split('.')[0])
-            if dlg.exec_():
-                values = dlg.getValues()
-                interval_tuple = (values[0].timestamp, values[1].timestamp)
+                interval_tuple = (st.timestamp, et.timestamp)
 
                 print(interval_tuple)
 
@@ -1312,13 +1368,13 @@ class Window(QtGui.QMainWindow):
                 print('Finding Data for specified time interval.....')
 
 
-                query = self.db.queryByTime([str(kwargs['sta']).split('.')[1]], chan_list, interval_tuple[0], interval_tuple[1])
+                query = self.db.queryByTime(select_net, select_sta, select_comp, select_tags, interval_tuple[0], interval_tuple[1])
 
                 for matched_info in query.values():
                     print(matched_info["ASDF_tag"])
 
                     # read the data from the ASDF into stream
-                    temp_tr = self.ds.waveforms[kwargs['sta']][matched_info["ASDF_tag"]][0]
+                    temp_tr = self.ds.waveforms[matched_info["new_network"] + '.' + matched_info["new_station"]][matched_info["ASDF_tag"]][0]
 
                     # trim trace to start and endtime
                     temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
@@ -1328,6 +1384,8 @@ class Window(QtGui.QMainWindow):
 
                     # free memory
                     temp_tr = None
+
+        print(self.st)
 
         try:
 
