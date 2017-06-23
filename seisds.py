@@ -40,6 +40,14 @@ class SeisDB(object):
                 for _i, (key, value) in enumerate(self._json_dict.iteritems()):
                     self._indexed_dict[_i] = key
                     temp_list = []
+
+                    # get ASDF tag
+                    tag = key.split('__')[3]
+
+                    temp_list.append(tag)
+                    if not dtype_pop:
+                        type_list.append(('tag', 'S100'))
+
                     for _j, (sub_key, sub_value) in enumerate(value.iteritems()):
                         # only add some of the attributes to the numpy array to speed up lookup
                         if sub_key == "tr_starttime":
@@ -101,7 +109,7 @@ class SeisDB(object):
             except KeyError as e:
                 print "Indexing JSON dictionary has failed with a key error({0}): {1}".format(e.errorno, e.strerror)
 
-    def queryByTime(self, sta, chan, query_starttime, query_endtime):
+    def queryByTime(self, net, sta, chan, tags, query_starttime, query_endtime):
         qs = query_starttime
         qe = query_endtime
         assert self._json_loaded, "Invalid SeisDB object. Try loading a valid JSON file first."
@@ -109,10 +117,16 @@ class SeisDB(object):
         if not self._use_numpy_index:
             indices = []
             for _i, key in enumerate(self._formatted_dict.keys()):
+                # check if tag matches
+                # get ASDF tag
+                tag = key.split('__')[3]
+                if not tag in tags:
+                    continue
                 matched_entry = self._formatted_dict[key]
                 if ((matched_entry['tr_starttime'] <= qs < matched_entry['tr_endtime'])
                     or (qs <= matched_entry['tr_starttime'] and matched_entry['tr_starttime'] < qe)) \
-                        and ((matched_entry['new_station'] in sta) and (matched_entry['new_channel'] in chan)):
+                        and ((matched_entry['new_network'] in net) and (matched_entry['new_station'] in sta) and (
+                            matched_entry['new_channel'] in chan)):
                     indices.append(_i)
             # indices_array = np.array(indices)
             # Print output
@@ -126,11 +140,12 @@ class SeisDB(object):
                         "new_network": self._formatted_dict[k]["new_network"]}
                     for k in indices}
         else:
-            _indexed_np_array_masked = np.where((np.in1d(self._indexed_np_array['sta'], sta))
-                           & (np.in1d(self._indexed_np_array['cha'], chan))
-                           & np.logical_or(np.logical_and(self._indexed_np_array['st'] <= qs,  qs < self._indexed_np_array['et']),
-                                           (np.logical_and(qs <= self._indexed_np_array['st'],
-                                                           self._indexed_np_array['st'] < qe))))
+            _indexed_np_array_masked = np.where(
+                (np.in1d(self._indexed_np_array['net'], net)) & (np.in1d(self._indexed_np_array['sta'], sta))
+                & (np.in1d(self._indexed_np_array['cha'], chan)) & (np.in1d(self._indexed_np_array['tag'], tags))
+                & np.logical_or(np.logical_and(self._indexed_np_array['st'] <= qs, qs < self._indexed_np_array['et']),
+                                (np.logical_and(qs <= self._indexed_np_array['st'],
+                                                self._indexed_np_array['st'] < qe))))
             # print(_indexed_np_array_masked[0])
             # for index in _indexed_np_array_masked[0]:
             #    print(self._indexed_np_array[index, 6])
@@ -173,7 +188,7 @@ class SeisDB(object):
 
         # print(_offset_st_array)
 
-        _diff_array = _offset_st_array-_sorted_et_array[:-1]
+        _diff_array = _offset_st_array - _sorted_et_array[:-1]
 
         # print(_diff_array)
 
@@ -188,12 +203,7 @@ class SeisDB(object):
         gaps_start_list = list(_sorted_et_array[_sorted_gaps_index])
         gaps_end_list = list(_offset_st_array[_sorted_gaps_index])
 
-        return(np.array([gaps_start_list, gaps_end_list]))
-
-
-
-
-
+        return (np.array([gaps_start_list, gaps_end_list]))
 
 
 if __name__ == "__main__":
