@@ -292,7 +292,6 @@ class Window(QtGui.QMainWindow):
         self.ui.events_web_view.settings().setAttribute(
             QtWebKit.QWebSettings.DeveloperExtrasEnabled, True)
 
-
         self._state = {}
 
         # set up dictionary for different ASDF files and associated attributes/items
@@ -892,7 +891,6 @@ class Window(QtGui.QMainWindow):
     def on_station_view_itemClicked(self, item):
         t = item.type()
 
-        # TODO: fix get station etc with new parent being the filename
         def get_station(item, parent=True):
             if parent:
                 station = str(item.parent().text(0))
@@ -960,16 +958,15 @@ class Window(QtGui.QMainWindow):
 
         if t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
             self.net_item_menu = QtGui.QMenu(self)
-            ext_menu = QtGui.QMenu('Select NSLC', self)
+            select_action = QtGui.QAction('Select NSCL', self)
+            select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False, sta=station, wave_tag=wave_tag))
             # TODO: station, channel, location selection for plotting
-        # elif t == STATION_VIEW_ITEM_TYPES["STATIONXML"]:
-        #     pass
-        # elif t == STATION_VIEW_ITEM_TYPES["WAVEFORM"]:
-        #     pass
+            select_action = self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
+
         elif t == STATION_VIEW_ITEM_TYPES["STATION"]:
             station = get_station(item)
             # make sure JSON DB is loaded in
-            if not self.seisdb:
+            if not self.db:
                 print("No DB is Loaded!!")
                 return
 
@@ -1183,7 +1180,6 @@ class Window(QtGui.QMainWindow):
     def on_station_view_itemEntered(self, item):
         t = item.type()
 
-        # TODO: fix get station etc with new parent being the filename
         def get_station(item, parent=True):
             if parent:
                 station = str(item.parent().text(0))
@@ -1224,21 +1220,6 @@ class Window(QtGui.QMainWindow):
         js_call = "setAllInactive()"
         self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
 
-    def query_sql_db(self, query, sql_filename, sta):
-        # Open a new st object
-        st = Stream()
-
-        # Initialize (open/create) the sqlalchemy sqlite engine
-        engine = create_engine('sqlite:///' + sql_filename)
-        Session = sessionmaker()
-        Session.configure(bind=engine)
-        session = Session()
-
-        for matched_waveform in session.query(Waveforms).filter(query):
-            st += self.ds.waveforms[sta][matched_waveform.full_id]
-
-        return(st)
-
     def extract_waveform_frm_ASDF(self, override, **kwargs):
         # Open a new st object
         self.st = Stream()
@@ -1260,7 +1241,7 @@ class Window(QtGui.QMainWindow):
                 chan_list.append(str(chan))
 
             interval_tuple = (self.new_start_time.timestamp, self.new_end_time.timestamp)
-            query = self.seisdb.queryByTime([sta], chan_list, interval_tuple[0],
+            query = self.db.queryByTime([sta], chan_list, interval_tuple[0],
                                             interval_tuple[1])
 
             for matched_info in query.values():
@@ -1302,7 +1283,7 @@ class Window(QtGui.QMainWindow):
                 print('Finding Data for specified time interval.....')
 
 
-                query = self.seisdb.queryByTime([str(kwargs['sta']).split('.')[1]], chan_list, interval_tuple[0], interval_tuple[1])
+                query = self.db.queryByTime([str(kwargs['sta']).split('.')[1]], chan_list, interval_tuple[0], interval_tuple[1])
 
                 for matched_info in query.values():
                     print(matched_info["ASDF_tag"])
@@ -1462,14 +1443,14 @@ class Window(QtGui.QMainWindow):
             str(len(station_list)) + " Stations",)
             sys.stdout.flush()
 
-            gaps_array = self.seisdb.get_recording_intervals(sta=sta, chan=chan)
+            gaps_array = self.db.get_recording_intervals(sta=sta, chan=chan)
 
             self.recording_gaps[station] = gaps_array
 
             temp_start_int = []
             temp_end_int = []
 
-            gaps_no = len(gaps_array[0])\
+            gaps_no = len(gaps_array[0])
 
             prev_endtime = ''
 
