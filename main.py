@@ -36,7 +36,7 @@ from seisds import SeisDB
 
 # load in Qt Designer UI files
 asdf_sextant_window_ui = "asdf_sextant_window.ui"
-select_stacomp_dialog_ui = "select_stacomp_dialog.ui"
+select_stacomp_dialog_ui = "selection_dialog.ui"
 extract_time_dialog_ui = "extract_time_dialog.ui"
 
 Ui_MainWindow, QtBaseClass = uic.loadUiType(asdf_sextant_window_ui)
@@ -441,8 +441,10 @@ class Window(QtGui.QMainWindow):
 
         # persistent list for all stations within ASDF file
         sta_list = []
-        # set with unique channel codes in survey
+        # set with unique channel codes in survey/network
         channel_codes_set = set()
+        # set with unique asdf tags for survey/network
+        tags_set = set()
 
         filename_item = QtGui.QTreeWidgetItem([self.ds_id],
                                               type=STATION_VIEW_ITEM_TYPES["FILE"])
@@ -468,6 +470,10 @@ class Window(QtGui.QMainWindow):
                     type=STATION_VIEW_ITEM_TYPES["STATION"])
 
                 sta_list.append(station._station_name)
+
+                # get all of the tags for that station and append to set
+                for tag in self.ds.waveforms[station._station_name].get_waveform_tags():
+                    tags_set.add(tag)
 
                 # get stationxml (to channel level) for station
                 station_inv = station.StationXML[0][0]
@@ -530,6 +536,7 @@ class Window(QtGui.QMainWindow):
         # make the channel code set into list and make persistant
         self.ASDF_accessor[self.ds_id]['channel_codes'] = list(channel_codes_set)
         self.ASDF_accessor[self.ds_id]['sta_list'] = sta_list
+        self.ASDF_accessor[self.ds_id]['tags_list'] = list(tags_set)
 
     def build_auxillary_tree_view(self):
         self.ui.auxiliary_data_tree_view.clear()
@@ -853,8 +860,8 @@ class Window(QtGui.QMainWindow):
         self.new_start_time = starttime - (delta_time - overlap_time)
         self.new_end_time = starttime + overlap_time
 
-        self.extract_waveform_frm_ASDF(True, st_ids=self._state["station_id"],
-                                       st_tags=self._state["station_tag"])
+        # self.extract_waveform_frm_ASDF(True, st_ids=self._state["station_id"],
+        #                                st_tags=self._state["station_tag"])
 
     def on_next_interval_push_button_released(self):
         # Get start and end time of next interval with 10% overlap
@@ -867,8 +874,11 @@ class Window(QtGui.QMainWindow):
         self.new_start_time = endtime - (overlap_time)
         self.new_end_time = endtime + (delta_time - overlap_time)
 
-        self.extract_waveform_frm_ASDF(True, st_ids = self._state["station_id"],
-                                       st_tags = self._state["station_tag"])
+        print(self._state["station_id"])
+        print(self._state["station_tag"])
+
+        # self.extract_waveform_frm_ASDF(True, st_ids = self._state["station_id"],
+        #                                st_tags = self._state["station_tag"])
 
     def reset_view(self):
         self._state["waveform_plots"][0].setXRange(
@@ -957,9 +967,16 @@ class Window(QtGui.QMainWindow):
             return station
 
         if t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
+            net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
+            chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
+            tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
+
+            # create station list with just station names without network code
+            sta_list = [x.split('.')[1] for x in net_sta_list]
+
             self.net_item_menu = QtGui.QMenu(self)
             select_action = QtGui.QAction('Select NSCL', self)
-            select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False, sta=station, wave_tag=wave_tag))
+            select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False, sta_list=sta_list, chan_list=chan_list))
             # TODO: station, channel, location selection for plotting
             select_action = self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
 
@@ -1224,42 +1241,54 @@ class Window(QtGui.QMainWindow):
         # Open a new st object
         self.st = Stream()
 
+        sta_list = kwargs['sta_list']
+        chan_list = kwargs['chan_list']
+
         # If override flag then we are calling this
         # method by using prev/next interval buttons
         if override:
-            net = str(kwargs["st_ids"][0]).split('.')[0]
-            sta = str(kwargs["st_ids"][0]).split('.')[1]
-            stnxml = self.ds.waveforms[net+'.'+sta].StationXML
-            # get the channels for that station
-            xml_list = stnxml.get_contents()['channels']
-            rec_start = stnxml[0][0].start_date
-
-            chan_list = []
-
-            for id in xml_list:
-                chan = id.split('.')[-1]
-                chan_list.append(str(chan))
-
-            interval_tuple = (self.new_start_time.timestamp, self.new_end_time.timestamp)
-            query = self.db.queryByTime([sta], chan_list, interval_tuple[0],
-                                            interval_tuple[1])
-
-            for matched_info in query.values():
-                print(matched_info["ASDF_tag"])
-
-                # read the data from the ASDF into stream
-                temp_tr = self.ds.waveforms[net+'.'+sta][matched_info["ASDF_tag"]][0]
-
-                # trim trace to start and endtime
-                temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
-
-                # append trace to stream
-                self.st += temp_tr
-
-                # free memory
-                temp_tr = None
+            # TODO: fix teh next/previous interval button plotting
+            pass
+            # net = str(kwargs["st_ids"][0]).split('.')[0]
+            # sta = str(kwargs["st_ids"][0]).split('.')[1]
+            # stnxml = self.ds.waveforms[net+'.'+sta].StationXML
+            # # get the channels for that station
+            # xml_list = stnxml.get_contents()['channels']
+            # rec_start = stnxml[0][0].start_date
+            #
+            # chan_list = []
+            #
+            # for id in xml_list:
+            #     chan = id.split('.')[-1]
+            #     chan_list.append(str(chan))
+            #
+            # interval_tuple = (self.new_start_time.timestamp, self.new_end_time.timestamp)
+            # query = self.db.queryByTime([sta], chan_list, interval_tuple[0],
+            #                                 interval_tuple[1])
+            #
+            # for matched_info in query.values():
+            #     print(matched_info["ASDF_tag"])
+            #
+            #     # read the data from the ASDF into stream
+            #     temp_tr = self.ds.waveforms[net+'.'+sta][matched_info["ASDF_tag"]][0]
+            #
+            #     # trim trace to start and endtime
+            #     temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
+            #
+            #     # append trace to stream
+            #     self.st += temp_tr
+            #
+            #     # free memory
+            #     temp_tr = None
 
         elif not override:
+
+            # now call station and channel selection dialog box
+            sel_dlg = selectionDialog(parent=self, sta_list=sta_list, chan_list=chan_list)
+            if sel_dlg.exec_():
+                select_sta, select_comp = sel_dlg.getSelected()
+
+
             stnxml = self.ds.waveforms[kwargs['sta']].StationXML
             # get the channels for that station
             xml_list = stnxml.get_contents()['channels']
