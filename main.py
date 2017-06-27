@@ -1606,7 +1606,7 @@ class Window(QtGui.QMainWindow):
             temp_start_int = []
             temp_end_int = []
 
-            gaps_no = gaps_array.shape[0]
+            gaps_no = gaps_array.shape[1]
 
             prev_endtime = ''
 
@@ -1615,25 +1615,29 @@ class Window(QtGui.QMainWindow):
                 temp_end_int.append(rec_end)
             else:
                 # populate the recording intervals dictionary
-                for _j, gap_entry in enumerate(gaps_array):
-                    # print(gaps_array[_j])
+                for _j in range(gaps_no):
+                    gap_start = gaps_array[0, _j]
+                    gap_end = gaps_array[1, _j]
+
                     if _j == 0:
                         # first interval
                         # print(UTCDateTime(rec_start).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
                         temp_start_int.append(rec_start)
-                        temp_end_int.append(gap_entry[0])
+                        temp_end_int.append(gap_start)
+                        prev_endtime = gap_end
 
-                    elif _j == gaps_no - 1:
+                    if _j == gaps_no - 1:
                         # last interval
                         # print(UTCDateTime(gap_entry['gap_end']).ctime(), UTCDateTime(rec_end).ctime())
-                        temp_start_int.append(gap_entry[1])
+                        temp_start_int.append(gap_end)
                         temp_end_int.append(rec_end)
 
-                    else:
+                    elif not _j == 0 and not _j == gaps_no -1:
                         # print(UTCDateTime(gaps_list[_j-1]['gap_end']).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
                         temp_start_int.append(prev_endtime)
-                        temp_end_int.append(gap_entry[0])
-                    prev_endtime = gap_entry[1]
+                        temp_end_int.append(gap_start)
+                        prev_endtime = gap_end
+
 
             # the [1] element of shape is the number of intervals
             rec_int_array = np.array([temp_start_int, temp_end_int])
