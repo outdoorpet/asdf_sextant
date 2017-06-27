@@ -1446,7 +1446,8 @@ class Window(QtGui.QMainWindow):
                 # Attempt to merge all traces with matching ID'S in place
                 print('')
                 print('Merging Traces from %s Stations....' % len(self.st))
-                self.st.merge()
+                # filling no data with 0
+                self.st.merge(fill_value=0)
                 print('\nTrimming Traces to specified time interval....')
                 self.st.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
                 self.update_waveform_plot()
