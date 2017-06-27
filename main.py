@@ -84,13 +84,15 @@ class DataAvailPlot(QtGui.QDialog):
     Dialog for Data Availablity plot
     '''
 
-    def __init__(self, parent=None, sta_list=None, chan_list=None, rec_int_dict=None):
+    def __init__(self, parent=None, net_list=None, sta_list=None, chan_list=None, tags_list=None, rec_int_dict=None):
         super(DataAvailPlot, self).__init__(parent)
         self.setWindowTitle('Data Availability Plot')
 
         self.rec_int_dict = rec_int_dict
+        self.net_list = net_list
         self.sta_list = sta_list
         self.chan_list = chan_list
+        self.tags_list = tags_list
 
         self.initUI()
         self.plot_data()
@@ -115,11 +117,12 @@ class DataAvailPlot(QtGui.QDialog):
 
     def plot_data(self):
         # Launch the custom station/component selection dialog
-        sel_dlg = selectionDialog(parent=self, sta_list=self.sta_list, chan_list=self.chan_list)
+        sel_dlg = selectionDialog(parent=self, net_list=self.net_list, sta_list=self.sta_list, chan_list=self.chan_list, tags_list=self.tags_list)
         if sel_dlg.exec_():
-            select_sta, select_comp = sel_dlg.getSelected()
+            select_net, select_sta, select_comp, select_tags = sel_dlg.getSelected()
 
-            enum_sta = list(enumerate(select_sta))
+            enum_sta = list(enumerate(self.rec_int_dict.keys()))
+
             # rearrange dict
             sta_id_dict = dict([(b, a) for a, b in enum_sta])
 
@@ -144,9 +147,8 @@ class DataAvailPlot(QtGui.QDialog):
 
             # iterate through stations
             for stn_key, rec_array in self.rec_int_dict.iteritems():
-                # print(rec_array)
 
-                if not stn_key in select_sta:
+                if not stn_key.split('.')[1] in select_sta:
                     continue
                 # iterate through gaps list
                 for _i in range(rec_array.shape[1]):
@@ -193,8 +195,15 @@ class selectionDialog(QtGui.QDialog):
         # Set all check box to checked
         # self.selui.check_all.setChecked(True)
 
-        self.selui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
-        self.selui.endtime.setDateTime(QtCore.QDateTime.fromString(ph_end, "yyyy-MM-ddThh:mm:ss"))
+
+        if not ph_start==None and not ph_end==None:
+            self.selui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
+            self.selui.endtime.setDateTime(QtCore.QDateTime.fromString(ph_end, "yyyy-MM-ddThh:mm:ss"))
+            self.no_time = False
+        else:
+            self.no_time = True
+            self.selui.starttime.setEnabled(False)
+            self.selui.endtime.setEnabled(False)
 
         self.selui.check_all.clicked.connect(self.selectAllCheckChanged)
 
@@ -300,10 +309,14 @@ class selectionDialog(QtGui.QDialog):
                 select_tags.append(str(self.tags_model.item(i).text()))
             i += 1
 
-        # Return Selected stations and selected channels
-        return (select_networks, select_stations, select_channels, select_tags,
-                UTCDateTime(self.selui.starttime.dateTime().toPyDateTime()),
-                UTCDateTime(self.selui.endtime.dateTime().toPyDateTime()))
+        if self.no_time:
+            # Return Selected networks, stations and selected channels, tags
+            return (select_networks, select_stations, select_channels, select_tags)
+        else:
+            # Return Selected networks, stations and selected channels, tags and start and end times
+            return (select_networks, select_stations, select_channels, select_tags,
+                    UTCDateTime(self.selui.starttime.dateTime().toPyDateTime()),
+                    UTCDateTime(self.selui.endtime.dateTime().toPyDateTime()))
 
 
 class Window(QtGui.QMainWindow):
@@ -890,6 +903,32 @@ class Window(QtGui.QMainWindow):
 
         self.reset_view()
 
+    def get_current_plot_info(self, st, et):
+        ids_list = self._state["station_id"]
+        tags_list = self._state["station_tag"]
+
+        net_set = set()
+        sta_set = set()
+        chan_set = set()
+        tags_set = set()
+
+        for id in ids_list:
+            net, sta, loc, chan = id.split('.')
+            net_set.add(net)
+            sta_set.add(sta)
+            chan_set.add(chan)
+
+        for tag in tags_list:
+            tags_set.add(tag)
+
+        self.extract_waveform_frm_ASDF(True,
+                                       net_list=list(net_set),
+                                       sta_list=list(sta_set),
+                                       chan_list=list(chan_set),
+                                       tags_list=list(tags_set),
+                                       ph_st=st,
+                                       ph_et=et)
+
     def on_previous_interval_push_button_released(self):
         # Get start and end time of previous interval with 10% overlap
         starttime = UTCDateTime(self._state["waveform_plots_min_time"])
@@ -898,11 +937,10 @@ class Window(QtGui.QMainWindow):
         delta_time = endtime - starttime
         overlap_time = delta_time * 0.1
 
-        self.new_start_time = starttime - (delta_time - overlap_time)
-        self.new_end_time = starttime + overlap_time
+        new_start_time = starttime - (delta_time - overlap_time)
+        new_end_time = starttime + overlap_time
 
-        # self.extract_waveform_frm_ASDF(True, st_ids=self._state["station_id"],
-        #                                st_tags=self._state["station_tag"])
+        self.get_current_plot_info(new_start_time, new_end_time)
 
     def on_next_interval_push_button_released(self):
         # Get start and end time of next interval with 10% overlap
@@ -912,14 +950,10 @@ class Window(QtGui.QMainWindow):
         delta_time = endtime - starttime
         overlap_time = delta_time * 0.1
 
-        self.new_start_time = endtime - (overlap_time)
-        self.new_end_time = endtime + (delta_time - overlap_time)
+        new_start_time = endtime - (overlap_time)
+        new_end_time = endtime + (delta_time - overlap_time)
 
-        print(self._state["station_id"])
-        print(self._state["station_tag"])
-
-        # self.extract_waveform_frm_ASDF(True, st_ids = self._state["station_id"],
-        #                                st_tags = self._state["station_tag"])
+        self.get_current_plot_info(new_start_time, new_end_time)
 
     def reset_view(self):
         self._state["waveform_plots"][0].setXRange(
@@ -1049,28 +1083,76 @@ class Window(QtGui.QMainWindow):
                 print("No DB is Loaded!!")
                 return
 
-            wave_tag_list = self.ds.waveforms[station].get_waveform_tags()
+
+            net_list = [station.split('.')[0]]
+            sta_list = [station.split('.')[1]]
+
+            # get station accessor for ASDF
+            sta = self.ds.waveforms[station]
+
+            # get inventory for station
+            inv = sta.StationXML
+
+            net_st = inv[0].start_date
+            net_et = inv[0].end_date
+
+            chan_list = [x.split('.')[2] for x in inv[0][0].get_contents()["channels"]]
+
+            tags_list = sta.get_waveform_tags()
 
             # Run Method to create ASDF SQL database with SQLite (one db per station within ASDF)
             # self.create_asdf_sql(station)
 
-            self.sta_item_menu = QtGui.QMenu(self)
-            ext_menu = QtGui.QMenu('Extract Time Interval', self)
+            self.net_item_menu = QtGui.QMenu(self)
+            select_action = QtGui.QAction('Extract Waveforms for Station', self)
+            select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False,
+                                                                                   net_list=net_list,
+                                                                                   sta_list=sta_list,
+                                                                                   chan_list=chan_list,
+                                                                                   tags_list=tags_list,
+                                                                                   ph_st=str(net_st).split('.')[0],
+                                                                                   ph_et=
+                                                                                   str(net_st + 60 * 60).split('.')[0]))
 
-            # Add actions for each tag for station
-            for wave_tag in wave_tag_list:
-                action = QtGui.QAction(wave_tag, self)
-                # Connect the triggered menu object to a function passing an extra variable
-                action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False, sta=station, wave_tag=wave_tag))
-                ext_menu.addAction(action)
-
-            self.sta_item_menu.addMenu(ext_menu)
-
-            self.action = self.sta_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
+            self.net_item_menu.addAction(select_action)
+            self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
 
         elif t == STATION_VIEW_ITEM_TYPES["CHANNEL"]:
-            # TODO: plotting single channel waveform
-            pass
+            station_item = item.parent()
+            station = get_station(station_item)
+            channel = item.text(0)
+
+
+            net_list = [station.split('.')[0]]
+            sta_list = [station.split('.')[1]]
+            chan_list = [channel]
+
+            # get station accessor for ASDF
+            sta = self.ds.waveforms[station]
+
+            tags_list = sta.get_waveform_tags()
+
+            # get inventory for station
+            inv = sta.StationXML
+
+            net_st = inv[0].start_date
+            net_et = inv[0].end_date
+
+            self.net_item_menu = QtGui.QMenu(self)
+            select_action = QtGui.QAction('Extract Waveforms for Channel', self)
+            select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False,
+                                                                                   net_list=net_list,
+                                                                                   sta_list=sta_list,
+                                                                                   chan_list=chan_list,
+                                                                                   tags_list=tags_list,
+                                                                                   ph_st=str(net_st).split('.')[0],
+                                                                                   ph_et=
+                                                                                   str(net_st + 60 * 60).split('.')[0]))
+
+            self.net_item_menu.addAction(select_action)
+            self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
+
+
 
     def on_event_tree_widget_itemClicked(self, item, column):
         t = item.type()
@@ -1313,39 +1395,24 @@ class Window(QtGui.QMainWindow):
         # If override flag then we are calling this
         # method by using prev/next interval buttons
         if override:
-            # TODO: fix teh next/previous interval button plotting
-            pass
-            # net = str(kwargs["st_ids"][0]).split('.')[0]
-            # sta = str(kwargs["st_ids"][0]).split('.')[1]
-            # stnxml = self.ds.waveforms[net+'.'+sta].StationXML
-            # # get the channels for that station
-            # xml_list = stnxml.get_contents()['channels']
-            # rec_start = stnxml[0][0].start_date
-            #
-            # chan_list = []
-            #
-            # for id in xml_list:
-            #     chan = id.split('.')[-1]
-            #     chan_list.append(str(chan))
-            #
-            # interval_tuple = (self.new_start_time.timestamp, self.new_end_time.timestamp)
-            # query = self.db.queryByTime([sta], chan_list, interval_tuple[0],
-            #                                 interval_tuple[1])
-            #
-            # for matched_info in query.values():
-            #     print(matched_info["ASDF_tag"])
-            #
-            #     # read the data from the ASDF into stream
-            #     temp_tr = self.ds.waveforms[net+'.'+sta][matched_info["ASDF_tag"]][0]
-            #
-            #     # trim trace to start and endtime
-            #     temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
-            #
-            #     # append trace to stream
-            #     self.st += temp_tr
-            #
-            #     # free memory
-            #     temp_tr = None
+
+            interval_tuple = (ph_st.timestamp, ph_et.timestamp)
+            query = self.db.queryByTime(net_list, sta_list, chan_list, tags_list, interval_tuple[0], interval_tuple[1])
+
+            for matched_info in query.values():
+
+                # read the data from the ASDF into stream
+                temp_tr = self.ds.waveforms[matched_info["new_network"] + '.' + matched_info["new_station"]][
+                    matched_info["ASDF_tag"]][0]
+
+                # trim trace to start and endtime
+                temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
+
+                # append trace to stream
+                self.st += temp_tr
+
+                # free memory
+                temp_tr = None
 
         elif not override:
 
@@ -1353,25 +1420,25 @@ class Window(QtGui.QMainWindow):
             sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
                                       tags_list=tags_list, ph_start=ph_st, ph_end=ph_et)
             if sel_dlg.exec_():
-                select_net, select_sta, select_comp, select_tags, st, et = sel_dlg.getSelected()
-                print(select_net)
-                print(select_sta)
-                print(select_comp)
-                print(select_tags)
+                select_net, select_sta, select_chan, select_tags, st, et = sel_dlg.getSelected()
 
                 interval_tuple = (st.timestamp, et.timestamp)
-
-                print(interval_tuple)
 
 
                 print('---------------------------------------')
                 print('Finding Data for specified time interval.....')
 
+                # print(select_net)
+                # print(select_sta)
+                # print(select_chan)
+                # print(select_tags)
+                # print(UTCDateTime(interval_tuple[0]))
+                # print(UTCDateTime(interval_tuple[1]))
 
-                query = self.db.queryByTime(select_net, select_sta, select_comp, select_tags, interval_tuple[0], interval_tuple[1])
+                query = self.db.queryByTime(select_net, select_sta, select_chan, select_tags, interval_tuple[0], interval_tuple[1])
 
                 for matched_info in query.values():
-                    print(matched_info["ASDF_tag"])
+                    # print(matched_info["ASDF_tag"])
 
                     # read the data from the ASDF into stream
                     temp_tr = self.ds.waveforms[matched_info["new_network"] + '.' + matched_info["new_station"]][matched_info["ASDF_tag"]][0]
@@ -1385,7 +1452,6 @@ class Window(QtGui.QMainWindow):
                     # free memory
                     temp_tr = None
 
-        print(self.st)
 
         try:
 
@@ -1483,10 +1549,16 @@ class Window(QtGui.QMainWindow):
 
         print("\nUsing DataBase to find data gaps, overlaps and recording intervals")
 
-        station_list = self.ds.waveforms.list()
+        net_sta_list = self.ds.waveforms.list()
+
+        tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
+
+        # make list with station codes and network codes seperated
+        net_list = list(set([x.split('.')[0] for x in net_sta_list]))
+        sta_list = [x.split('.')[1] for x in net_sta_list]
 
         # iterate through stations
-        for _i, station in enumerate(station_list):
+        for _i, station in enumerate(net_sta_list):
             stnxml = self.ds.waveforms[station].StationXML
             # get the start recording interval
             #  and get the end recording interval
@@ -1498,6 +1570,10 @@ class Window(QtGui.QMainWindow):
             except AttributeError:
                 print("No start/end dates found in XML")
                 break
+
+            if station == "7D.CZ40":
+                print("rec_start:", UTCDateTime(rec_start))
+                print("rec_end:", UTCDateTime(rec_end))
 
             # get the channels for that station
             xml_list = stnxml.select(channel="*Z").get_contents()['channels']
@@ -1527,17 +1603,23 @@ class Window(QtGui.QMainWindow):
                 continue
 
             print("\r Working on Station: " + station + ", " + str(_i + 1) + " of " + \
-            str(len(station_list)) + " Stations",)
+            str(len(net_sta_list)) + " Stations",)
             sys.stdout.flush()
 
             gaps_array = self.db.get_recording_intervals(sta=sta, chan=chan)
+
+            # if station == "7D.CZ40":
+            #     print("GAPS:")
+            #     for _i in range(len(gaps_array)):
+            #
+            #         print(UTCDateTime(gaps_array[_i, 0]), UTCDateTime(gaps_array[_i, 1]))
 
             self.recording_gaps[station] = gaps_array
 
             temp_start_int = []
             temp_end_int = []
 
-            gaps_no = len(gaps_array[0])
+            gaps_no = gaps_array.shape[0]
 
             prev_endtime = ''
 
@@ -1545,7 +1627,7 @@ class Window(QtGui.QMainWindow):
                 temp_start_int.append(rec_start)
                 temp_end_int.append(rec_end)
             else:
-                # now populate the recording intervals dictionary
+                # populate the recording intervals dictionary
                 for _j, gap_entry in enumerate(gaps_array):
                     # print(gaps_array[_j])
                     if _j == 0:
@@ -1566,20 +1648,29 @@ class Window(QtGui.QMainWindow):
                         temp_end_int.append(gap_entry[0])
                     prev_endtime = gap_entry[1]
 
-
+            # the [1] element of shape is the number of intervals
             rec_int_array = np.array([temp_start_int, temp_end_int])
             self.recording_intervals[station] = rec_int_array
 
 
-            # add the gaps into the auxillary data
-            self.ds.add_auxiliary_data(data_type=data_type, path=gaps_path, data=gaps_array,
-                                       parameters={"Description": "2D Numpy array with "
-                                                                  "UTCDateTime Timestamps for the start/end "
-                                                                  "of a gap interval"})
-            self.ds.add_auxiliary_data(data_type=data_type, path=rec_int_path, data=rec_int_array,
-                                       parameters={"Description": "2D Numpy array with "
-                                                                  "UTCDateTime Timestamps for the start/end "
-                                                                  "of a recording interval"})
+
+            #
+            # if station == "7D.CZ40":
+            #     print("Intervals")
+            #     for _i in range(rec_int_array.shape[1]):
+            #         print(UTCDateTime(rec_int_array[0, _i]), UTCDateTime(rec_int_array[1, _i]))
+
+
+
+            # # add the gaps into the auxillary data
+            # self.ds.add_auxiliary_data(data_type=data_type, path=gaps_path, data=gaps_array,
+            #                            parameters={"Description": "2D Numpy array with "
+            #                                                       "UTCDateTime Timestamps for the start/end "
+            #                                                       "of a gap interval"})
+            # self.ds.add_auxiliary_data(data_type=data_type, path=rec_int_path, data=rec_int_array,
+            #                            parameters={"Description": "2D Numpy array with "
+            #                                                       "UTCDateTime Timestamps for the start/end "
+            #                                                       "of a recording interval"})
 
         print("")
         print("\nFinished calculating station recording intervals")
@@ -1590,8 +1681,11 @@ class Window(QtGui.QMainWindow):
 
         # print("running data avail")
 
-        self.data_avail_plot = DataAvailPlot(parent=self, sta_list=station_list,
-                                             chan_list=[chan],
+
+
+
+        self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+                                             chan_list=[chan], tags_list=tags_list,
                                              rec_int_dict=self.recording_intervals)
 
 
