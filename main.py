@@ -166,19 +166,6 @@ class DataAvailPlot(QtGui.QDialog):
             self.plot.addItem(err)
 
 
-# class timeDialog(QtGui.QDialog):
-#     def __init__(self, parent=None, ):
-#         QtGui.QDialog.__init__(self, parent)
-#         self.timeui = Ui_ExtractTimeDialog()
-#         self.timeui.setupUi(self)
-#
-#
-#
-#     def getValues(self):
-#         return (UTCDateTime(self.timeui.starttime.dateTime().toPyDateTime()),
-#                 UTCDateTime(self.timeui.endtime.dateTime().toPyDateTime()))
-
-
 class selectionDialog(QtGui.QDialog):
     '''
     Select all functionality is modified from Brendan Abel & dbc from their
@@ -1581,26 +1568,26 @@ class Window(QtGui.QMainWindow):
             sta = str(xml_list[0]).split('.')[1]
             chan = str(xml_list[0]).split('.')[3]
 
-            # the auxillary data hierarchy
-            data_type = "StationAvailability"
-            gaps_path = station.replace('.', '_') + '/DataGaps'
-            # ovlps_path = station.replace('.', '_') + '/DataOverlaps'
-            rec_int_path = station.replace('.', '_') + '/RecordingIntervals'
-
-            # check if there is already info in auxillary data
-            try:
-                aux_gaps = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["DataGaps"].data
-                aux_rec_ints = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["RecordingIntervals"].data
-            except KeyError:
-                # no gaps/interval info stored in auxillary data
-                pass
-            else:
-                print("Gaps and recording interval information already in "
-                      "ASDF Auxillary Data for Station: %s ....." % station)
-                self.recording_intervals[station] = aux_rec_ints
-                self.recording_gaps[station] = aux_gaps
-
-                continue
+            # # the auxillary data hierarchy
+            # data_type = "StationAvailability"
+            # gaps_path = station.replace('.', '_') + '/DataGaps'
+            # # ovlps_path = station.replace('.', '_') + '/DataOverlaps'
+            # rec_int_path = station.replace('.', '_') + '/RecordingIntervals'
+            #
+            # # check if there is already info in auxillary data
+            # try:
+            #     aux_gaps = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["DataGaps"].data
+            #     aux_rec_ints = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["RecordingIntervals"].data
+            # except KeyError:
+            #     # no gaps/interval info stored in auxillary data
+            #     pass
+            # else:
+            #     print("Gaps and recording interval information already in "
+            #           "ASDF Auxillary Data for Station: %s ....." % station)
+            #     self.recording_intervals[station] = aux_rec_ints
+            #     self.recording_gaps[station] = aux_gaps
+            #
+            #     continue
 
             print("\r Working on Station: " + station + ", " + str(_i + 1) + " of " + \
             str(len(net_sta_list)) + " Stations",)
@@ -1652,8 +1639,6 @@ class Window(QtGui.QMainWindow):
             rec_int_array = np.array([temp_start_int, temp_end_int])
             self.recording_intervals[station] = rec_int_array
 
-
-
             #
             # if station == "7D.CZ40":
             #     print("Intervals")
@@ -1674,15 +1659,12 @@ class Window(QtGui.QMainWindow):
 
         print("")
         print("\nFinished calculating station recording intervals")
-        print("Wrote data into ASDF auxillary information" )
+        # print("Wrote data into ASDF auxillary information" )
 
-        self.build_auxillary_tree_view()
+        # self.build_auxillary_tree_view()
         # print(self.recording_intervals)
 
         # print("running data avail")
-
-
-
 
         self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
                                              chan_list=[chan], tags_list=tags_list,
