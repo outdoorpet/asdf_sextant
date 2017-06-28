@@ -16,6 +16,7 @@ from PyQt4 import QtGui, QtCore, QtWebKit, QtNetwork, uic
 import pyqtgraph as pg
 import qdarkstyle
 
+import pandas as pd
 import numpy as np
 
 import glob
@@ -26,6 +27,7 @@ import tempfile
 import obspy.core.event
 import pyasdf
 from pyasdf.exceptions import ASDFValueError
+import functools
 
 from os.path import join, dirname, basename
 from obspy.core import UTCDateTime, Stream
@@ -34,16 +36,19 @@ from DateAxisItem import DateAxisItem
 from seisds import SeisDB
 
 # TODO: test functionality with ASDF file with multiple networks
+# TODO: add functionality to highlight logfile associated with a waveform
 
 
 # load in Qt Designer UI files
 asdf_sextant_window_ui = "asdf_sextant_window.ui"
 select_stacomp_dialog_ui = "selection_dialog.ui"
 extract_time_dialog_ui = "extract_time_dialog.ui"
+eq_extraction_dialog_ui = "eq_extraction_dialog.ui"
 
 Ui_MainWindow, QtBaseClass = uic.loadUiType(asdf_sextant_window_ui)
 Ui_SelectDialog, QtBaseClass = uic.loadUiType(select_stacomp_dialog_ui)
 Ui_ExtractTimeDialog, QtBaseClass = uic.loadUiType(extract_time_dialog_ui)
+Ui_EqExtractionDialog, QtBaseClass = uic.loadUiType(eq_extraction_dialog_ui)
 
 # Enums only exists in Python 3 and we don't really need them here...
 STATION_VIEW_ITEM_TYPES = {
@@ -80,6 +85,102 @@ def sizeof_fmt(num):
             return "%3.1f %s" % (num, x)
         num /= 1024.0
     return "%3.1f %s" % (num, "TB")
+
+class PandasModel(QtCore.QAbstractTableModel):
+    """
+    Class to populate a table view with a pandas dataframe
+    """
+
+    def __init__(self, data, cat_nm=None, parent=None):
+        QtCore.QAbstractTableModel.__init__(self, parent)
+        self._data = np.array(data.values)
+        self._cols = data.columns
+        self.r, self.c = np.shape(self._data)
+
+        self.cat_nm = cat_nm
+
+        # Column headers for tables
+        self.cat_col_header = ['Event ID', 'Time (UTC Timestamp)', 'Lat (dd)', 'Lon  (dd)',
+                               'Depth (km)', 'Mag', 'Time (UTC)', 'Julian Day']
+
+    def rowCount(self, parent=None):
+        return self.r
+
+    def columnCount(self, parent=None):
+        return self.c
+
+    def data(self, index, role=QtCore.Qt.DisplayRole):
+
+        if index.isValid():
+            if role == QtCore.Qt.DisplayRole:
+                return self._data[index.row(), index.column()]
+        return None
+
+    def headerData(self, p_int, orientation, role):
+        if role == QtCore.Qt.DisplayRole:
+            if orientation == QtCore.Qt.Horizontal:
+                if not self.cat_nm == None:
+                    return self.cat_col_header[p_int]
+                elif not self.pick_nm == None:
+                    return self.pick_col_header[p_int]
+            elif orientation == QtCore.Qt.Vertical:
+                return p_int
+        return None
+
+
+class EqTableDialog(QtGui.QDialog):
+    """
+    Class to create a separate child window to display the event catalogue and a map
+    """
+
+    def __init__(self, parent=None, cat_df=None):
+        QtGui.QDialog.__init__(self, parent)
+        self.tbldui = Ui_EqExtractionDialog()
+        self.tbldui.setupUi(self)
+
+        self.cat_df = cat_df
+
+        self.tbldui.EQ_xtract_tableView.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+
+        # Populate the tables using the custom Pandas table class
+        cat_model = PandasModel(self.cat_df, cat_nm=True)
+
+        self.tbldui.EQ_xtract_tableView.setModel(cat_model)
+
+        cache = QtNetwork.QNetworkDiskCache()
+        cache.setCacheDirectory("cache")
+        self.tbldui.EQ_xtract_webView.page().networkAccessManager().setCache(cache)
+        self.tbldui.EQ_xtract_webView.page().networkAccessManager()
+
+        self.tbldui.EQ_xtract_webView.page().mainFrame().addToJavaScriptWindowObject("EqTableDialog", self)
+        self.tbldui.EQ_xtract_webView.page().setLinkDelegationPolicy(QtWebKit.QWebPage.DelegateAllLinks)
+        self.tbldui.EQ_xtract_webView.load(QtCore.QUrl('resources/map.html'))
+        self.tbldui.EQ_xtract_webView.loadFinished.connect(self.onLoadFinished)
+        self.tbldui.EQ_xtract_webView.linkClicked.connect(QtGui.QDesktopServices.openUrl)
+
+        self.show()
+
+        self.plot_events()
+
+    def onLoadFinished(self):
+        with open('resources/map.js', 'r') as f:
+            frame = self.tbldui.EQ_xtract_webView.page().mainFrame()
+            frame.evaluateJavaScript(f.read())
+
+    def plot_events(self):
+        # Plot the events
+        for row_index, row in self.cat_df.iterrows():
+            js_call = "addEvent('{event_id}', {row_index}, " \
+                      "{latitude}, {longitude}, '{a_color}', '{p_color}');" \
+                .format(event_id=row['event_id'], row_index=int(row_index), latitude=row['lat'],
+                        longitude=row['lon'], a_color="Red",
+                        p_color="#008000")
+
+            print(js_call)
+            self.tbldui.EQ_xtract_webView.page().mainFrame().evaluateJavaScript(js_call)
+
+
+
 
 class DataAvailPlot(QtGui.QDialog):
     '''
@@ -183,7 +284,6 @@ class selectionDialog(QtGui.QDialog):
 
         # Set all check box to checked
         # self.selui.check_all.setChecked(True)
-
 
         if not ph_start==None and not ph_end==None:
             self.selui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
@@ -788,13 +888,83 @@ class Window(QtGui.QMainWindow):
 
         cat = read_events(self.cat_filename)
 
-        print(cat)
+        # create empty data frame
+        self.cat_df = pd.DataFrame(data=None, columns=['event_id', 'qtime', 'lat', 'lon', 'depth', 'mag'])
+
+
+        # iterate through the events
+        for _i, event in enumerate(cat):
+            # Get quake origin info
+            origin_info = event.preferred_origin() or event.origins[0]
+
+            try:
+                mag_info = event.preferred_magnitude() or event.magnitudes[0]
+                magnitude = mag_info.mag
+            except IndexError:
+                # No magnitude for event
+                magnitude = None
+
+            self.cat_df.loc[_i] = [str(event.resource_id.id).split('=')[1], int(origin_info.time.timestamp),
+                              origin_info.latitude, origin_info.longitude,
+                              origin_info.depth / 1000, magnitude]
+
+        self.cat_df.reset_index(drop=True, inplace=True)
+
+        print('------------')
+        print(self.cat_df)
+
+        self.build_tables()
+
 
         # TODO: poulate dataframe table with catalogue under events tab
         # TODO: add extract earthquake functionality similar to QC_events_ASDF GUI
 
         # add into new ASDF file
         # open the catalogue in a dataframe view under events tab
+
+    def tbl_view_popup(self):
+
+        focus_widget = QtGui.QApplication.focusWidget()
+        # get the selected row number
+        row_number = focus_widget.selectionModel().selectedRows()[0].row()
+        row_index = self.table_accessor[focus_widget][1][row_number]
+
+        self.selected_row = self.cat_df.loc[row_index]
+
+        self.rc_menu = QtGui.QMenu(self)
+        self.rc_menu.addAction('Open Earthquake with SG2K', functools.partial(
+            self.create_SG2K_initiate, self.selected_row['event_id'], self.selected_row, row_index))
+
+        self.rc_menu.popup(QtGui.QCursor.pos())
+
+    def build_tables(self):
+
+        self.table_accessor = None
+
+        dropped_cat_df = self.cat_df
+
+        # make UTC string from earthquake cat and add julian day column
+        def mk_cat_UTC_str(row):
+            return (pd.Series([UTCDateTime(row['qtime']).ctime(), UTCDateTime(row['qtime']).julday]))
+
+        dropped_cat_df[['Q_time_str', 'julday']] = dropped_cat_df.apply(mk_cat_UTC_str, axis=1)
+
+         #tbld table dialog
+        self.tbld = EqTableDialog(parent=self, cat_df=dropped_cat_df)
+
+        self.tbld.tbldui.EQ_xtract_tableView.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.tbld.tbldui.EQ_xtract_tableView.customContextMenuRequested.connect(self.tbl_view_popup)
+
+        # Lookup Dictionary for table views
+        self.tbl_view_dict = {"cat": self.tbld.tbldui.EQ_xtract_tableView}
+
+        # Create a new table_accessor dictionary for this class
+        self.table_accessor = {self.tbld.tbldui.EQ_xtract_tableView: [dropped_cat_df, range(0, len(dropped_cat_df))]}
+
+        # self.tbld.cat_event_table_view.clicked.connect(self.table_view_clicked)
+
+        # If headers are clicked then sort
+        # self.tbld.cat_event_table_view.horizontalHeader().sectionClicked.connect(self.headerClicked)
 
     def on_detrend_and_demean_check_box_stateChanged(self, state):
         self.update_waveform_plot()
@@ -824,6 +994,8 @@ class Window(QtGui.QMainWindow):
                 vLine.setPos(mousePoint.x())
 
     def update_waveform_plot(self):
+        # TODO: add ability to decouple an axis
+        # add picking functionality
         self.ui.central_tab.setCurrentIndex(0)
         self.ui.initial_view_push_button.setEnabled(True)
         self.ui.previous_view_push_button.setEnabled(True)
