@@ -33,6 +33,8 @@ from obspy import read_events
 from DateAxisItem import DateAxisItem
 from seisds import SeisDB
 
+# TODO: test functionality with ASDF file with multiple networks
+
 
 # load in Qt Designer UI files
 asdf_sextant_window_ui = "asdf_sextant_window.ui"
@@ -788,8 +790,10 @@ class Window(QtGui.QMainWindow):
 
         print(cat)
 
+        # TODO: poulate dataframe table with catalogue under events tab
+        # TODO: add extract earthquake functionality similar to QC_events_ASDF GUI
+
         # add into new ASDF file
-        # TODO: Impliment the same multi ASDF file functionality as QC_Events_ASDF
         # open the catalogue in a dataframe view under events tab
 
     def on_detrend_and_demean_check_box_stateChanged(self, state):
@@ -1140,7 +1144,6 @@ class Window(QtGui.QMainWindow):
             self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
 
 
-
     def on_event_tree_widget_itemClicked(self, item, column):
         t = item.type()
         if t not in EVENT_VIEW_ITEM_TYPES.values():
@@ -1326,6 +1329,8 @@ class Window(QtGui.QMainWindow):
         self.show_provenance_document(data)
 
     def on_station_view_itemEntered(self, item):
+        # TODO: fix station highlighting on hover
+        # TODO: fix station popup label on map
         t = item.type()
 
         def get_station(item, parent=True):
@@ -1463,7 +1468,7 @@ class Window(QtGui.QMainWindow):
                 msg.exec_()
 
         except UnboundLocalError:
-            # the atation selection dialog box was cancelled
+            # the station selection dialog box was cancelled
             pass
 
     # def analyse_earthquake(self, event_obj):
@@ -1525,6 +1530,9 @@ class Window(QtGui.QMainWindow):
     #             self.update_waveform_plot()
 
     def station_availability(self):
+        # TODO: add function to highlight interval for extraction on station availability plot
+        # TODO: add ability to customize station availability plot (i.e. add or remove stations/networks)
+        # TODO: add highlighting window that shows current plot view interval for which stations
 
         # go through JSON entries and find all gaps save them into dictionary
         self.recording_gaps = {}
