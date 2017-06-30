@@ -34,6 +34,7 @@ from obspy.core import UTCDateTime, Stream
 from obspy import read_events
 from DateAxisItem import DateAxisItem
 from seisds import SeisDB
+from query_input_yes_no import query_yes_no
 
 # TODO: fix Mac OS QMenu bar (currnetly the app needs to be de-focussed and focussed to make the menu bar work)
 # TODO: test functionality with ASDF file with multiple networks
@@ -1215,8 +1216,11 @@ class Window(QtGui.QMainWindow):
                 inv = station.StationXML
                 break
 
+            print(inv[0])
             net_st = inv[0].start_date
             net_et = inv[0].end_date
+
+            print(net_st)
 
             net_list = [net]
             net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
@@ -1884,10 +1888,16 @@ def launch():
 
 
 if __name__ == "__main__":
+    proxy_queary = query_yes_no("Input Proxy Settings?")
 
-    # proxy = raw_input("Proxy:")
-    # port = raw_input("Proxy Port:")
-    #
-    # networkProxy = QtNetwork.QNetworkProxy(QtNetwork.QNetworkProxy.HttpProxy, proxy, int(port))
-    # QtNetwork.QNetworkProxy.setApplicationProxy(networkProxy)
+    if proxy_queary == 'yes':
+        print('')
+        proxy = raw_input("Proxy:")
+        port = raw_input("Proxy Port:")
+        try:
+            networkProxy = QtNetwork.QNetworkProxy(QtNetwork.QNetworkProxy.HttpProxy, proxy, int(port))
+            QtNetwork.QNetworkProxy.setApplicationProxy(networkProxy)
+        except ValueError:
+            print('No proxy settings supplied..')
+            sys.exit()
     launch()
