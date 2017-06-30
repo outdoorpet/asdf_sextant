@@ -35,8 +35,10 @@ from obspy import read_events
 from DateAxisItem import DateAxisItem
 from seisds import SeisDB
 
+# TODO: fix Mac OS QMenu bar (currnetly the app needs to be de-focussed and focussed to make the menu bar work)
 # TODO: test functionality with ASDF file with multiple networks
 # TODO: add functionality to highlight logfile associated with a waveform
+# TODO: investigate making application into exectuable
 
 
 # load in Qt Designer UI files
