@@ -40,6 +40,7 @@ from query_input_yes_no import query_yes_no
 # TODO: test functionality with ASDF file with multiple networks
 # TODO: add functionality to highlight logfile associated with a waveform
 # TODO: investigate making application into exectuable
+# TODO: Find out why its so slow to load in big ASDF files
 
 
 # load in Qt Designer UI files
@@ -1216,7 +1217,6 @@ class Window(QtGui.QMainWindow):
                 inv = station.StationXML
                 break
 
-            print(inv[0])
             net_st = inv[0].start_date
             net_et = inv[0].end_date
 
