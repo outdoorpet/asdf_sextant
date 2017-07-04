@@ -605,7 +605,7 @@ class Window(QtGui.QMainWindow):
         print("Selecting network...")
         self.on_station_view_itemClicked(filename_item)
 
-        # Iterate through station accessors in ASDF file
+        # Iterate through station accessors in ASDF file just extract to station level for now
         for key, group in itertools.groupby(
                 self.ds.waveforms,
                 key=lambda x: x._station_name.split(".")[0]):
@@ -621,9 +621,12 @@ class Window(QtGui.QMainWindow):
 
                 sta_list.append(station._station_name)
 
+
+
                 # get all of the tags for that station and append to set
                 for tag in self.ds.waveforms[station._station_name].get_waveform_tags():
                     tags_set.add(tag)
+
 
                 # get stationxml (to channel level) for station
                 station_inv = station.StationXML[0][0]
@@ -704,7 +707,6 @@ class Window(QtGui.QMainWindow):
                 type=AUX_DATA_ITEM_TYPES["DATA_TYPE"])
 
 
-            print(self.ds.auxiliary_data[data_type].list())
             # get children one level down
             children = []
             for sub_item in self.ds.auxiliary_data[data_type].list():
@@ -1192,6 +1194,9 @@ class Window(QtGui.QMainWindow):
             station = get_station(item, parent=False)
             js_call = "highlightStation('{station}')".format(station=station)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+
+
+
         elif t == STATION_VIEW_ITEM_TYPES["CHANNEL"]:
             select_file(str(item.parent().parent().parent().text(0)))
             station = get_station(item)
