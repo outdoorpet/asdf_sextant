@@ -137,6 +137,7 @@ class EqTableDialog(QtGui.QDialog):
     Class to create a separate child window to display the event catalogue and a map
     """
 
+    # TODO: fix station highlight on map for EQ Table Dialog
     def __init__(self, parent=None, cat_df=None):
         QtGui.QDialog.__init__(self, parent)
         self.tbldui = Ui_EqExtractionDialog()
@@ -182,8 +183,6 @@ class EqTableDialog(QtGui.QDialog):
 
             print(js_call)
             self.tbldui.EQ_xtract_webView.page().mainFrame().evaluateJavaScript(js_call)
-
-
 
 
 class DataAvailPlot(QtGui.QDialog):
@@ -497,6 +496,7 @@ class Window(QtGui.QMainWindow):
             self.on_station_view_itemExited)
 
     def change_active_ASDF(self, ds_id):
+        print("Changing Active ASDF file....")
         self.ds = self.ASDF_accessor[ds_id]["ds"]
         self.db = self.ASDF_accessor[ds_id]["db"]
         self.ds_id = ds_id
@@ -584,6 +584,8 @@ class Window(QtGui.QMainWindow):
         if not hasattr(self, "ds") or not self.ds:
             return
 
+        print("Building Station View List.....")
+
         items = []
 
         # persistent list for all stations within ASDF file
@@ -600,6 +602,7 @@ class Window(QtGui.QMainWindow):
         self.ASDF_accessor[self.ds_id]['file_tree_item'] = filename_item
         # self.ASDF_accessor[self.ds_id]['def_bkgrnd_col'] = filename_item.background(0)
 
+        print("Selecting network...")
         self.on_station_view_itemClicked(filename_item)
 
         # Iterate through station accessors in ASDF file
@@ -684,34 +687,37 @@ class Window(QtGui.QMainWindow):
         self.ASDF_accessor[self.ds_id]['channel_codes'] = list(channel_codes_set)
         self.ASDF_accessor[self.ds_id]['sta_list'] = sta_list
         self.ASDF_accessor[self.ds_id]['tags_list'] = list(tags_set)
+        print("done Building station view")
 
     def build_auxillary_tree_view(self):
         self.ui.auxiliary_data_tree_view.clear()
 
         # Also add the auxiliary data.
+        # Note: it seems slow to read in all of the child information for Auxillary data
+        # for now only read in child info when auxillary parent item is clicked
 
-        def recursive_tree(name, item):
-            if isinstance(item, pyasdf.utils.AuxiliaryDataAccessor):
-                data_type_item = QtGui.QTreeWidgetItem(
-                    [name],
-                    type=AUX_DATA_ITEM_TYPES["DATA_TYPE"])
-                children = []
-                for sub_item in item.list():
-                    children.append(recursive_tree(sub_item, item[sub_item]))
-                data_type_item.addChildren(children)
-            elif isinstance(item, pyasdf.utils.AuxiliaryDataContainer):
-                data_type_item = QtGui.QTreeWidgetItem(
-                    [name],
-                    type=AUX_DATA_ITEM_TYPES["DATA_ITEM"])
-            else:
-                raise NotImplementedError
-            return data_type_item
 
         items = []
         for data_type in self.ds.auxiliary_data.list():
-            items.append(recursive_tree(data_type,
-                                        self.ds.auxiliary_data[data_type]))
+            data_type_item = QtGui.QTreeWidgetItem(
+                [data_type],
+                type=AUX_DATA_ITEM_TYPES["DATA_TYPE"])
+
+
+            print(self.ds.auxiliary_data[data_type].list())
+            # get children one level down
+            children = []
+            for sub_item in self.ds.auxiliary_data[data_type].list():
+                child_item = QtGui.QTreeWidgetItem(
+                    [sub_item],
+                    type=AUX_DATA_ITEM_TYPES["DATA_TYPE"])
+                children.append(child_item)
+            data_type_item.addChildren(children)
+
+
+            items.append(data_type_item)
         self.ui.auxiliary_data_tree_view.insertTopLevelItems(0, items)
+        print("Done Building Aux")
 
     def on_initial_view_push_button_released(self):
         self.reset_view()
@@ -798,6 +804,7 @@ class Window(QtGui.QMainWindow):
                     self.ui.references_push_button.pos()))
 
     def read_ASDF_info(self):
+        print("Reading ASDF Info....")
 
         for station_id, coordinates in self.ds.get_all_coordinates().items():
             if not coordinates:
@@ -808,7 +815,7 @@ class Window(QtGui.QMainWindow):
                                latitude=coordinates["latitude"],
                                longitude=coordinates["longitude"]))
 
-
+        print("Building Event Tree View.....")
         self.build_event_tree_view()
 
         # Add all the provenance items
@@ -817,6 +824,7 @@ class Window(QtGui.QMainWindow):
             item = QtGui.QStandardItem(provenance)
             self.provenance_list_model.appendRow(item)
 
+        print("Building Auxillary Tree View.....")
         self.build_auxillary_tree_view()
 
         sb = self.ui.status_bar
@@ -831,6 +839,7 @@ class Window(QtGui.QMainWindow):
         w.show()
         sb.show()
         sb.reformat()
+        print(" done with ASDF info...")
 
     def open_json_file(self, asdf_file):
         # automatically get associated JSON database file if it exists
@@ -875,8 +884,12 @@ class Window(QtGui.QMainWindow):
         # open the associated JSON database if it exists
         self.open_json_file(asdf_file)
 
-        # call the function to get the currently selected db and ds
-        self.change_active_ASDF(asdf_filename)
+        # # call the function to get the currently selected db and ds
+        # self.change_active_ASDF(asdf_filename)
+
+        self.ds = self.ASDF_accessor[asdf_filename]["ds"]
+        self.db = self.ASDF_accessor[asdf_filename]["db"]
+        self.ds_id = asdf_filename
 
         self.build_station_view_list()
 
@@ -1398,6 +1411,37 @@ class Window(QtGui.QMainWindow):
 
     def on_auxiliary_data_tree_view_itemClicked(self, item, column):
         t = item.type()
+
+        def recursive_tree(name, item):
+            if isinstance(item, pyasdf.utils.AuxiliaryDataAccessor):
+                data_type_item = QtGui.QTreeWidgetItem(
+                    [name],
+                    type=AUX_DATA_ITEM_TYPES["DATA_TYPE"])
+                children = []
+                for sub_item in item.list():
+                    children.append(recursive_tree(sub_item, item[sub_item]))
+                data_type_item.addChildren(children)
+            elif isinstance(item, pyasdf.utils.AuxiliaryDataContainer):
+                data_type_item = QtGui.QTreeWidgetItem(
+                    [name],
+                    type=AUX_DATA_ITEM_TYPES["DATA_ITEM"])
+            else:
+                raise NotImplementedError
+            return data_type_item
+
+        # attempt to unpack children
+        if item.childCount() == 0 and t != AUX_DATA_ITEM_TYPES["DATA_ITEM"]:
+            data_type = item.parent().text(0)
+            path_lev_zero = item.text(0)
+
+            sub_items = []
+
+            # run the recursive function to unpack all sub children and data
+            for sub_data in self.ds.auxiliary_data[data_type][path_lev_zero].list():
+                sub_items.append(recursive_tree(sub_data, self.ds.auxiliary_data[data_type][path_lev_zero][sub_data]))
+
+            item.addChildren(sub_items)
+
         if t != AUX_DATA_ITEM_TYPES["DATA_ITEM"]:
             return
 
