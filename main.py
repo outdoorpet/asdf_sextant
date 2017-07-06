@@ -40,8 +40,14 @@ from query_input_yes_no import query_yes_no
 # TODO: test functionality with ASDF file with multiple networks
 # TODO: add functionality to highlight logfile associated with a waveform
 # TODO: investigate making application into exectuable
-# TODO: Find out why its so slow to load in big ASDF files
-
+# TODO: Find out why its so slow to load in big ASDF files (see below)
+"""
+               - Discovered that it is opening the auxillary info and the station xml associated
+                 with each waveform that is slow.
+               - made it so that only the upper levels of the Auxillary data are read on
+                 start-up and lower down data is read on the fly
+               - need to change the station tree population to a similar method
+"""
 
 # load in Qt Designer UI files
 asdf_sextant_window_ui = "asdf_sextant_window.ui"
@@ -947,7 +953,7 @@ class Window(QtGui.QMainWindow):
         self.build_tables()
 
 
-        # TODO: poulate dataframe table with catalogue under events tab
+        # TODO: poulate dataframe table with catalogue under events tab - (Edit: make new window for earthquake catalogue)
         # TODO: add extract earthquake functionality similar to QC_events_ASDF GUI
 
         # add into new ASDF file
@@ -1097,7 +1103,7 @@ class Window(QtGui.QMainWindow):
 
         self.reset_view()
 
-    def get_current_plot_info(self, st, et):
+    def get_current_plot_info(self):
         ids_list = self._state["station_id"]
         tags_list = self._state["station_tag"]
 
@@ -1115,13 +1121,7 @@ class Window(QtGui.QMainWindow):
         for tag in tags_list:
             tags_set.add(tag)
 
-        self.extract_waveform_frm_ASDF(True,
-                                       net_list=list(net_set),
-                                       sta_list=list(sta_set),
-                                       chan_list=list(chan_set),
-                                       tags_list=list(tags_set),
-                                       ph_st=st,
-                                       ph_et=et)
+        return (net_set, sta_set, chan_set, tags_set)
 
     def on_previous_interval_push_button_released(self):
         # Get start and end time of previous interval with 10% overlap
@@ -1134,7 +1134,15 @@ class Window(QtGui.QMainWindow):
         new_start_time = starttime - (delta_time - overlap_time)
         new_end_time = starttime + overlap_time
 
-        self.get_current_plot_info(new_start_time, new_end_time)
+        net_set, sta_set, chan_set, tags_set = self.get_current_plot_info()
+
+        self.extract_waveform_frm_ASDF(True,
+                                       net_list=list(net_set),
+                                       sta_list=list(sta_set),
+                                       chan_list=list(chan_set),
+                                       tags_list=list(tags_set),
+                                       ph_st=new_start_time,
+                                       ph_et=new_end_time)
 
     def on_next_interval_push_button_released(self):
         # Get start and end time of next interval with 10% overlap
@@ -1147,7 +1155,28 @@ class Window(QtGui.QMainWindow):
         new_start_time = endtime - (overlap_time)
         new_end_time = endtime + (delta_time - overlap_time)
 
-        self.get_current_plot_info(new_start_time, new_end_time)
+        net_set, sta_set, chan_set, tags_set = self.get_current_plot_info()
+
+        self.extract_waveform_frm_ASDF(True,
+                                       net_list=list(net_set),
+                                       sta_list=list(sta_set),
+                                       chan_list=list(chan_set),
+                                       tags_list=list(tags_set),
+                                       ph_st=new_start_time,
+                                       ph_et=new_end_time)
+
+
+    def on_xcorr_push_button_released(self):
+        """
+        perform cross correlations of data in view with nearest permenant station data
+        :return:
+        """
+        # Get start and end time of data in view
+        starttime = UTCDateTime(self._state["waveform_plots_min_time"])
+        endtime = UTCDateTime(self._state["waveform_plots_max_time"])
+
+
+
 
     def reset_view(self):
         self._state["waveform_plots"][0].setXRange(
@@ -1645,6 +1674,8 @@ class Window(QtGui.QMainWindow):
                 # free memory
                 temp_tr = None
 
+        # if there is no override flag then we want to extract data from a desired net/sta/chan and time interval
+        # i.e. show the selection dialog
         elif not override:
 
             # now call station and channel selection dialog box
@@ -1770,7 +1801,6 @@ class Window(QtGui.QMainWindow):
 
     def station_availability(self):
         # TODO: add function to highlight interval for extraction on station availability plot
-        # TODO: add ability to customize station availability plot (i.e. add or remove stations/networks)
         # TODO: add highlighting window that shows current plot view interval for which stations
 
         # go through JSON entries and find all gaps save them into dictionary

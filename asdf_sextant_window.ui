@@ -9,7 +9,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1201</width>
+    <width>1325</width>
     <height>818</height>
    </rect>
   </property>
@@ -170,6 +170,16 @@
                </size>
               </property>
              </spacer>
+            </item>
+            <item>
+             <widget class="QPushButton" name="xcorr_push_button">
+              <property name="toolTip">
+               <string>Perform Cross-Correlation of data in view with data from nearest permenant station</string>
+              </property>
+              <property name="text">
+               <string>XCORR</string>
+              </property>
+             </widget>
             </item>
             <item>
              <widget class="QPushButton" name="references_push_button">
@@ -400,7 +410,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1201</width>
+     <width>1325</width>
      <height>26</height>
     </rect>
    </property>
