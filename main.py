@@ -227,7 +227,18 @@ class DataAvailPlot(QtGui.QDialog):
         if sel_dlg.exec_():
             select_net, select_sta, select_comp, select_tags = sel_dlg.getSelected()
 
-            enum_sta = list(enumerate(self.rec_int_dict.keys()))
+
+            # new list of stations nn.sssss format with only those in selected stations
+            net_sta_list = []
+
+            for net_sta in self.rec_int_dict.keys():
+                net = net_sta.split('.')[0]
+                sta = net_sta.split('.')[1]
+                if (net in select_net and sta in select_sta):
+                    net_sta_list.append(net_sta)
+
+            # enum_sta = list(enumerate(self.rec_int_dict.keys()))
+            enum_sta = list(enumerate(net_sta_list))
 
             # rearrange dict
             sta_id_dict = dict([(b, a) for a, b in enum_sta])
@@ -256,6 +267,7 @@ class DataAvailPlot(QtGui.QDialog):
 
                 if not stn_key.split('.')[1] in select_sta:
                     continue
+
                 # iterate through gaps list
                 for _i in range(rec_array.shape[1]):
                     diff_frm_mid = (rec_array[1,_i] - rec_array[0, _i]) / 2.0
