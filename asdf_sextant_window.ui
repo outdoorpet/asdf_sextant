@@ -174,7 +174,7 @@
             <item>
              <widget class="QPushButton" name="xcorr_push_button">
               <property name="toolTip">
-               <string>Perform Cross-Correlation of data in view with data from nearest permenant station</string>
+               <string>Perform Cross-Correlation of data in view with data from nearest permanent station</string>
               </property>
               <property name="text">
                <string>XCORR</string>
@@ -432,6 +432,7 @@
     </property>
     <addaction name="actionFilter"/>
     <addaction name="actionStation_Availability"/>
+    <addaction name="actionXCOR"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -463,6 +464,14 @@
   <action name="openEQ_QuakeML">
    <property name="text">
     <string>Open EQ QuakeML</string>
+   </property>
+  </action>
+  <action name="actionXCOR">
+   <property name="text">
+    <string>Get XCOR Data</string>
+   </property>
+   <property name="toolTip">
+    <string>Get data to perform cross-correlations against permanent network stations for data QA/QC</string>
    </property>
   </action>
  </widget>

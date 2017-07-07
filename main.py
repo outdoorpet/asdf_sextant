@@ -36,6 +36,7 @@ from DateAxisItem import DateAxisItem
 from seisds import SeisDB
 from query_input_yes_no import query_yes_no
 
+# TODO: add in scroll bar to plot window when there are too many plots (like QC_P_time_compare)
 # TODO: fix Mac OS QMenu bar (currnetly the app needs to be de-focussed and focussed to make the menu bar work)
 # TODO: test functionality with ASDF file with multiple networks
 # TODO: add functionality to highlight logfile associated with a waveform
@@ -54,11 +55,13 @@ asdf_sextant_window_ui = "asdf_sextant_window.ui"
 select_stacomp_dialog_ui = "selection_dialog.ui"
 extract_time_dialog_ui = "extract_time_dialog.ui"
 eq_extraction_dialog_ui = "eq_extraction_dialog.ui"
+data_avail_dialog_ui = "data_avail_dialog.ui"
 
 Ui_MainWindow, QtBaseClass = uic.loadUiType(asdf_sextant_window_ui)
 Ui_SelectDialog, QtBaseClass = uic.loadUiType(select_stacomp_dialog_ui)
 Ui_ExtractTimeDialog, QtBaseClass = uic.loadUiType(extract_time_dialog_ui)
 Ui_EqExtractionDialog, QtBaseClass = uic.loadUiType(eq_extraction_dialog_ui)
+Ui_DataAvailDialog, QtBaseClass = uic.loadUiType(data_avail_dialog_ui)
 
 # Enums only exists in Python 3 and we don't really need them here...
 STATION_VIEW_ITEM_TYPES = {
@@ -197,8 +200,11 @@ class DataAvailPlot(QtGui.QDialog):
     '''
 
     def __init__(self, parent=None, net_list=None, sta_list=None, chan_list=None, tags_list=None, rec_int_dict=None):
-        super(DataAvailPlot, self).__init__(parent)
-        self.setWindowTitle('Data Availability Plot')
+        QtGui.QDialog.__init__(self, parent)
+        self.davailui = Ui_DataAvailDialog()
+        self.davailui.setupUi(self)
+
+        # self.data_avail_graph_view = pg.GraphicsLayoutWidget()
 
         self.rec_int_dict = rec_int_dict
         self.net_list = net_list
@@ -206,18 +212,88 @@ class DataAvailPlot(QtGui.QDialog):
         self.chan_list = chan_list
         self.tags_list = tags_list
 
-        self.initUI()
+        self.select_data()
         self.plot_data()
 
-    def initUI(self):
-        vbox = QtGui.QVBoxLayout()
-        self.setLayout(vbox)
-
-        self.data_avail_graph_view = pg.GraphicsLayoutWidget()
-
-        vbox.addWidget(self.data_avail_graph_view)
+        # flag for which extract region method is used
+        self.xtract_method = None
 
         self.show()
+
+    def roi_tooltip(self, sta_id, sta, roi_type):
+        if roi_type == "reg1":
+            self.plot.setToolTip("XCOR region 1")
+        else:
+            self.plot.setToolTip("XCOR region 2")
+
+    def control_roi_translate(self, roi, sta_id):
+        """
+        Keep the roi so that it's y axis is always along the station it is associated with
+        :param roi: roi that is being moved
+        :param sta_id: id number (int) of the station that the roi is associated with
+        """
+
+        if roi.pos()[1] != sta_id-0.3:
+            roi.setPos(pg.Point(roi.pos()[0], sta_id-0.3), update=False)
+
+    def on_sel_xcor_regions_push_button_released(self):
+
+        self.xtract_method = "xcor_region"
+
+        # reset the plot
+        self.plot_data()
+
+        # get the view range of the plot window [[xmin, xmax],[ymin, ymax]]
+        vr = self.plot.viewRange()
+
+        # dictionary for ROI access
+        self.roi_dict = {}
+
+        for key, sta_id in self.sta_id_dict.iteritems():
+
+            bef_roi_pen = QtGui.QPen()
+            bef_roi_pen.setColor(QtCore.Qt.green)
+
+            bef_roi = pg.ROI(pos=[vr[0][0]+(60*60*24), sta_id-0.3], size=[60*60*24, 0.6], pen=bef_roi_pen)
+            bef_roi.addScaleHandle([0, 0.5], [0.5, 0.5])
+            bef_roi.setZValue(0)
+
+            aft_roi_pen = QtGui.QPen()
+            aft_roi_pen.setColor(QtCore.Qt.yellow)
+            aft_roi = pg.ROI(pos=[vr[0][1]-(60*60*24*2), sta_id-0.3], size=[60*60*24, 0.6], pen=aft_roi_pen)
+            aft_roi.addScaleHandle([1, 0.5], [0.5, 0.5])
+            aft_roi.setZValue(0)
+
+            self.plot.addItem(bef_roi)
+            self.plot.addItem(aft_roi)
+
+            # make popup tooltip about the roi
+            bef_roi.sigHoverEvent.connect(functools.partial(self.roi_tooltip, sta_id, key, "bef"))
+            aft_roi.sigHoverEvent.connect(functools.partial(self.roi_tooltip, sta_id, key, "aft"))
+
+            # control where the roi can be dragged too
+            bef_roi.sigRegionChanged.connect(functools.partial(self.control_roi_translate, bef_roi, sta_id))
+            aft_roi.sigRegionChanged.connect(functools.partial(self.control_roi_translate, aft_roi, sta_id))
+
+            # add rois to dict
+            self.roi_dict[sta_id] = {"bef": bef_roi, "aft": aft_roi}
+
+    def on_sel_view_region_push_button_released(self):
+        """
+        Method to create a single Linear region for extracting data for all stations in view
+        """
+        self.xtract_method = "view_region"
+
+        # get the view range of the plot window [[xmin, xmax],[ymin, ymax]]
+        vr = self.plot.viewRange()
+
+        # dictionary for ROI access
+        self.roi_dict = {}
+
+        self.plot_data()
+        self.lri = pg.LinearRegionItem(values=[vr[0][0]+(60*60*24), vr[0][0]+(60*60*1)])
+
+        self.plot.addItem(self.lri)
 
     def dispMousePos(self, pos):
         # Display current mouse coords if over the scatter plot area as a tooltip
@@ -227,11 +303,11 @@ class DataAvailPlot(QtGui.QDialog):
         except:
             pass
 
-    def plot_data(self):
+    def select_data(self):
         # Launch the custom station/component selection dialog
         sel_dlg = selectionDialog(parent=self, net_list=self.net_list, sta_list=self.sta_list, chan_list=self.chan_list, tags_list=self.tags_list)
         if sel_dlg.exec_():
-            select_net, select_sta, select_comp, select_tags = sel_dlg.getSelected()
+            self.select_net, self.select_sta, self.select_comp, self.select_tags = sel_dlg.getSelected()
 
 
             # new list of stations nn.sssss format with only those in selected stations
@@ -240,54 +316,89 @@ class DataAvailPlot(QtGui.QDialog):
             for net_sta in self.rec_int_dict.keys():
                 net = net_sta.split('.')[0]
                 sta = net_sta.split('.')[1]
-                if (net in select_net and sta in select_sta):
+                if (net in self.select_net and sta in self.select_sta):
                     net_sta_list.append(net_sta)
 
             # enum_sta = list(enumerate(self.rec_int_dict.keys()))
             enum_sta = list(enumerate(net_sta_list))
 
             # rearrange dict
-            sta_id_dict = dict([(b, a) for a, b in enum_sta])
+            self.sta_id_dict = dict([(b, a) for a, b in enum_sta])
 
-            y_axis_string = pg.AxisItem(orientation='left')
-            y_axis_string.setTicks([enum_sta])
+            self.y_axis_string = pg.AxisItem(orientation='left')
+            self.y_axis_string.setTicks([enum_sta])
 
-            def get_sta_id(sta):
-                return (sta_id_dict[sta])
+    def plot_data(self):
+        def get_sta_id(sta):
+            return (self.sta_id_dict[sta])
 
-            # Set up the plotting area
-            self.plot = self.data_avail_graph_view.addPlot(0, 0,
-                                                           axisItems={'bottom': DateAxisItem(orientation='bottom',
-                                                                                             utcOffset=0),
-                                                                      'left': y_axis_string})
-            self.plot.setMouseEnabled(x=True, y=False)
-            # When Mouse is moved over plot print the data coordinates
-            self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
+        self.davailui.data_avail_graph_view.clear()
 
-            rec_midpoints = []
-            sta_ids = []
-            diff_frm_mid_list = []
+        # Set up the plotting area
+        self.plot = self.davailui.data_avail_graph_view.addPlot(0, 0,
+                                                       axisItems={'bottom': DateAxisItem(orientation='bottom',
+                                                                                         utcOffset=0),
+                                                                  'left': self.y_axis_string})
+        self.plot.setMouseEnabled(x=True, y=False)
+        # When Mouse is moved over plot print the data coordinates
+        self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
 
-            # iterate through stations
-            for stn_key, rec_array in self.rec_int_dict.iteritems():
+        rec_midpoints = []
+        sta_ids = []
+        diff_frm_mid_list = []
 
-                if not stn_key.split('.')[1] in select_sta:
-                    continue
+        # iterate through stations
+        for stn_key, rec_array in self.rec_int_dict.iteritems():
 
-                # iterate through gaps list
-                for _i in range(rec_array.shape[1]):
-                    diff_frm_mid = (rec_array[1,_i] - rec_array[0, _i]) / 2.0
+            if not stn_key.split('.')[1] in self.select_sta:
+                continue
 
-                    diff_frm_mid_list.append(diff_frm_mid)
+            # iterate through gaps list
+            for _i in range(rec_array.shape[1]):
+                diff_frm_mid = (rec_array[1,_i] - rec_array[0, _i]) / 2.0
 
-                    rec_midpoints.append(rec_array[0, _i] + diff_frm_mid)
-                    sta_ids.append(get_sta_id(stn_key))
+                diff_frm_mid_list.append(diff_frm_mid)
 
-            # Plot Error bar data recording intervals
-            err = pg.ErrorBarItem(x=np.array(rec_midpoints), y=np.array(sta_ids), left=np.array(diff_frm_mid_list),
-                                  right=np.array(diff_frm_mid_list), beam=0.06)
+                rec_midpoints.append(rec_array[0, _i] + diff_frm_mid)
+                sta_ids.append(get_sta_id(stn_key))
 
-            self.plot.addItem(err)
+        # Plot Error bar data recording intervals
+        err = pg.ErrorBarItem(x=np.array(rec_midpoints), y=np.array(sta_ids), left=np.array(diff_frm_mid_list),
+                              right=np.array(diff_frm_mid_list), beam=0.06)
+
+        err.setZValue(10)
+
+        self.plot.addItem(err)
+
+    def get_roi_data(self):
+        print(self.xtract_method)
+
+        def get_left_right_roi(r):
+            """
+            get the left and right (x) values for a roi
+            :param r: roi
+            :return: x left, x right
+            """
+
+            roi_left_x = r.pos()[0]
+            roi_width = r.size()[0]
+
+            return(roi_left_x, roi_left_x+roi_width)
+
+        if self.xtract_method == "view_region":
+            # get the start and end time of extraction region and also return desired net/sta/chan and tags
+            return (self.xtract_method, self.select_net, self.select_sta, self.select_comp, self.select_tags, self.lri.getRegion())
+        elif self.xtract_method == "xcor_region":
+            roi_limits_dict = {}
+            # go through all rois and get edges
+            for key, sta_id in self.sta_id_dict.iteritems():
+                # get the roi
+                bef_roi, aft_roi = (self.roi_dict[sta_id]["bef"], self.roi_dict[sta_id]["aft"])
+                roi_limits_dict[key] = (get_left_right_roi(bef_roi), get_left_right_roi(aft_roi))
+            return (self.xtract_method, self.select_net, self.select_sta, self.select_comp, self.select_tags, roi_limits_dict)
+        else:
+            # no extraction region
+            return None
 
 
 class selectionDialog(QtGui.QDialog):
@@ -464,8 +575,12 @@ class Window(QtGui.QMainWindow):
         self.ui.openASDF.triggered.connect(self.open_asdf_file)
         # self.ui.openJSON_DB.triggered.connect(self.open_json_file)
         self.ui.openEQ_QuakeML.triggered.connect(self.open_EQ_cat)
-
         self.ui.actionStation_Availability.triggered.connect(self.station_availability)
+
+
+        # self.ui.actionXCOR.triggered.connect(self.get_xcor_data)
+
+
         # self.ui.bpfilter.triggered.connect(self.bpfilter)
 
         # Add right clickability to station view
@@ -1741,6 +1856,7 @@ class Window(QtGui.QMainWindow):
             # the station selection dialog box was cancelled
             pass
 
+    # TODO: re-write eartquake extraction
     # def analyse_earthquake(self, event_obj):
     #     # Get event catalogue
     #     self.event_cat = self.ds.events
@@ -1952,6 +2068,59 @@ class Window(QtGui.QMainWindow):
                                              chan_list=[chan], tags_list=tags_list,
                                              rec_int_dict=self.recording_intervals)
 
+        # connect to the go button in plot
+        self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
+
+    def intervals_selected(self):
+        ret = self.data_avail_plot.get_roi_data()
+
+        if ret[0] == "view_region":
+            self.extract_waveform_frm_ASDF(True, net_list=ret[1],
+                                       sta_list=ret[2],
+                                       chan_list=ret[3],
+                                       tags_list=ret[4],
+                                       ph_st=UTCDateTime(ret[5][0]),
+                                       ph_et=UTCDateTime(ret[5][1]))
+
+        elif ret[0] == "xcor_region":
+            self.get_xcor_data(ret)
+
+
+    def get_xcor_data(self, sel_data):
+        """
+        Method to retrieve necessary data to perform cross-correlations against permanent network data for data QA/QC
+        :return:
+        """
+
+        xcor_asdf_file = str(QtGui.QFileDialog.getSaveFileName(
+            parent=self, caption="Choose Destination for XCOR ASDF file",
+            directory=os.path.expanduser("~"), filter="ASDF files (*.h5)"))
+        if not xcor_asdf_file:
+            return
+
+        #check if the given filename has a .h5 extension
+        if '.' in xcor_asdf_file:
+            if not xcor_asdf_file.split('.')[1] == 'h5':
+                xcor_asdf_file = xcor_asdf_file.split('.')[0] + '.h5'
+            else:
+                pass
+        else:
+            xcor_asdf_file = xcor_asdf_file+'.h5'
+
+        print(xcor_asdf_file)
+
+        # xcor_asdf_filename = basename(xcor_asdf_file)
+        #
+        # # open up new ASDF file for the xcorr data
+        # xcor_ds = pyasdf.ASDFDataSet(xcor_asdf_file)
+        #
+        # # add the asdf filename as key and the dataset into the file accessor
+        # self.ASDF_accessor[xcor_asdf_filename] = {"ds": xcor_ds}
+
+        print('Retrieving Data for QC-XCOR from array.....')
+
+        print('Retrieving Data for QC-XCOR from nearest permanent metwork station.....')
+        pass
 
 
 
