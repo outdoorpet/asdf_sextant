@@ -2154,6 +2154,9 @@ class Window(QtGui.QMainWindow):
             sta_accessor = self.ds.waveforms[net_sta]
 
             inv = sta_accessor.StationXML
+
+            select_inv = inv.select(channel="*Z")
+
             print(inv[0][0].latitude)
             print(inv[0][0].longitude)
             print(inv[0][0].elevation)
@@ -2250,24 +2253,40 @@ class Window(QtGui.QMainWindow):
             print(close_ref_inv)
 
             # now retreive data from IRIS
-            ref_st = Stream()
             try:
-                ref_st += client.get_waveforms(network=close_ref_inv[0].code, station=close_ref_inv[0][0].code, channel='*Z', location='*',
+                ref_st_bef = client.get_waveforms(network=close_ref_inv[0].code, station=close_ref_inv[0][0].code, channel='*Z', location='*',
                                                starttime=UTCDateTime(sel_data[5][sta][0][0]),
                                                endtime=UTCDateTime(sel_data[5][sta][0][1]))
 
-                ref_st += client.get_waveforms(network=close_ref_inv[0].code, station=close_ref_inv[0][0].code,
+                ref_st_aft = client.get_waveforms(network=close_ref_inv[0].code, station=close_ref_inv[0][0].code,
                                                channel='*Z', location='*',
                                                starttime=UTCDateTime(sel_data[5][sta][1][0]),
                                                endtime=UTCDateTime(sel_data[5][sta][1][1]))
+
+                # add data into asdf
+                xcor_ds.add_waveforms(ref_st_bef, tag="ref_data", labels=["region_1"])
+                xcor_ds.add_waveforms(ref_st_aft, tag="ref_data", labels=["region_2"])
             except FDSNException:
                 print("no data from IRIS")
 
 
-            print(ref_st)
-
 
             # add data into ASDF file
+            print(ref_st_bef[0].get_id())
+            print(ref_st_bef[0].get_id().replace('.', '_').lower()+"_ref_data")
+            for tr in st_bef:
+                xcor_ds.add_waveforms(tr, tag=ref_st_bef[0].get_id().replace('.', '_').lower()+"_ref_data", labels=["region_1"])
+            for tr in st_aft:
+                xcor_ds.add_waveforms(tr, tag=ref_st_aft[0].get_id().replace('.', '_').lower()+"_ref_data", labels=["region_2"])
+
+            #add in station xml
+
+            xcor_ds.add_stationxml(close_ref_inv)
+            xcor_ds.add_stationxml(select_inv)
+
+
+
+
 
 
 
