@@ -28,10 +28,13 @@ import obspy.core.event
 import pyasdf
 from pyasdf.exceptions import ASDFValueError
 import functools
+import math
 
 from os.path import join, dirname, basename
 from obspy.core import UTCDateTime, Stream
 from obspy import read_events
+from obspy.clients.fdsn.client import Client
+from obspy.clients.fdsn.header import FDSNException
 from DateAxisItem import DateAxisItem
 from seisds import SeisDB
 from query_input_yes_no import query_yes_no
@@ -226,15 +229,20 @@ class DataAvailPlot(QtGui.QDialog):
         else:
             self.plot.setToolTip("XCOR region 2")
 
-    def control_roi_translate(self, roi, sta_id):
+    def control_roi_translate(self, roi, active, sta_id):
         """
         Keep the roi so that it's y axis is always along the station it is associated with
         :param roi: roi that is being moved
+        :param active: (bool) if the user is still moving the ROI or if finished
         :param sta_id: id number (int) of the station that the roi is associated with
         """
+        if active:
+            if roi.pos()[1] != sta_id-0.3:
+                roi.setPos(pg.Point(roi.pos()[0], sta_id-0.3), update=False)
+        else:
+            #prevent all ROI movement
+            pass
 
-        if roi.pos()[1] != sta_id-0.3:
-            roi.setPos(pg.Point(roi.pos()[0], sta_id-0.3), update=False)
 
     def on_sel_xcor_regions_push_button_released(self):
 
@@ -272,8 +280,8 @@ class DataAvailPlot(QtGui.QDialog):
             aft_roi.sigHoverEvent.connect(functools.partial(self.roi_tooltip, sta_id, key, "aft"))
 
             # control where the roi can be dragged too
-            bef_roi.sigRegionChanged.connect(functools.partial(self.control_roi_translate, bef_roi, sta_id))
-            aft_roi.sigRegionChanged.connect(functools.partial(self.control_roi_translate, aft_roi, sta_id))
+            bef_roi.sigRegionChanged.connect(functools.partial(self.control_roi_translate, bef_roi, True, sta_id))
+            aft_roi.sigRegionChanged.connect(functools.partial(self.control_roi_translate, aft_roi, True, sta_id))
 
             # add rois to dict
             self.roi_dict[sta_id] = {"bef": bef_roi, "aft": aft_roi}
@@ -386,6 +394,8 @@ class DataAvailPlot(QtGui.QDialog):
             return(roi_left_x, roi_left_x+roi_width)
 
         if self.xtract_method == "view_region":
+            # make the region non moveable now
+            self.lri.setMovable(False)
             # get the start and end time of extraction region and also return desired net/sta/chan and tags
             return (self.xtract_method, self.select_net, self.select_sta, self.select_comp, self.select_tags, self.lri.getRegion())
         elif self.xtract_method == "xcor_region":
@@ -394,7 +404,12 @@ class DataAvailPlot(QtGui.QDialog):
             for key, sta_id in self.sta_id_dict.iteritems():
                 # get the roi
                 bef_roi, aft_roi = (self.roi_dict[sta_id]["bef"], self.roi_dict[sta_id]["aft"])
-                roi_limits_dict[key] = (get_left_right_roi(bef_roi), get_left_right_roi(aft_roi))
+
+                # # set the movability to false now
+                # bef_roi.sigRegionChanged.connect(functools.partial(self.control_roi_translate, bef_roi, False, sta_id))
+                # aft_roi.sigRegionChanged.connect(functools.partial(self.control_roi_translate, aft_roi, False, sta_id))
+
+                roi_limits_dict[key.split('.')[1]] = (get_left_right_roi(bef_roi), get_left_right_roi(aft_roi))
             return (self.xtract_method, self.select_net, self.select_sta, self.select_comp, self.select_tags, roi_limits_dict)
         else:
             # no extraction region
@@ -1829,8 +1844,8 @@ class Window(QtGui.QMainWindow):
                     # free memory
                     temp_tr = None
 
-
         try:
+            #TODO: Test if i need to do the final trim...
 
             if self.st.__nonzero__():
                 # Attempt to merge all traces with matching ID'S in place
@@ -2109,18 +2124,153 @@ class Window(QtGui.QMainWindow):
 
         print(xcor_asdf_file)
 
-        # xcor_asdf_filename = basename(xcor_asdf_file)
-        #
-        # # open up new ASDF file for the xcorr data
-        # xcor_ds = pyasdf.ASDFDataSet(xcor_asdf_file)
-        #
-        # # add the asdf filename as key and the dataset into the file accessor
-        # self.ASDF_accessor[xcor_asdf_filename] = {"ds": xcor_ds}
+        xcor_asdf_filename = basename(xcor_asdf_file)
+
+        if os.path.exists(xcor_asdf_file):
+            os.remove(xcor_asdf_file)
+
+
+        # open up new ASDF file for the xcorr data
+        xcor_ds = pyasdf.ASDFDataSet(xcor_asdf_file)
+
+        # add the asdf filename as key and the dataset into the file accessor
+        self.ASDF_accessor[xcor_asdf_filename] = {"ds": xcor_ds}
 
         print('Retrieving Data for QC-XCOR from array.....')
+        print(sel_data[5])
 
-        print('Retrieving Data for QC-XCOR from nearest permanent metwork station.....')
-        pass
+        # go through each selected station:
+        for sta in sel_data[2]:
+            print('..............')
+            print(sta)
+
+
+            # get the station xml for station
+            net_sta = sel_data[1][0]+'.'+sta
+
+            print(net_sta)
+
+            #sta_accessor
+            sta_accessor = self.ds.waveforms[net_sta]
+
+            inv = sta_accessor.StationXML
+            print(inv[0][0].latitude)
+            print(inv[0][0].longitude)
+            print(inv[0][0].elevation)
+
+
+
+            st_bef = Stream()
+
+            # query the asdf file for data within the before roi
+            query = self.db.queryByTime(sel_data[1], [sta], sel_data[3], sel_data[4], sel_data[5][sta][0][0], sel_data[5][sta][0][1])
+
+
+            for matched_info in query.values():
+                # print(matched_info["ASDF_tag"])
+
+                # read the data from the ASDF into stream
+                temp_tr = sta_accessor[matched_info["ASDF_tag"]][0]
+
+                # trim trace to start and endtime
+                temp_tr.trim(starttime=UTCDateTime(sel_data[5][sta][0][0]), endtime=UTCDateTime(sel_data[5][sta][0][1]))
+
+                # append trace to stream
+                st_bef += temp_tr
+
+                # free memory
+                temp_tr = None
+
+
+            if st_bef.__nonzero__():
+                # filling no data with 0
+                st_bef.merge(fill_value=0)
+                print('\nTrimming Traces to specified time interval....')
+                # st_bef.trim(starttime=UTCDateTime(sel_data[5][sta][0][0]), endtime=UTCDateTime(sel_data[5][sta][0][1]))
+
+            st_aft = Stream()
+
+            # do the same for the after roi
+            # query the asdf file for data within the before roi
+            query = self.db.queryByTime(sel_data[1], [sta], sel_data[3], sel_data[4], sel_data[5][sta][1][0],
+                                        sel_data[5][sta][1][1])
+
+            for matched_info in query.values():
+                # print(matched_info["ASDF_tag"])
+
+                # read the data from the ASDF into stream
+                temp_tr = sta_accessor[matched_info["ASDF_tag"]][0]
+
+                # trim trace to start and endtime
+                temp_tr.trim(starttime=UTCDateTime(sel_data[5][sta][1][0]), endtime=UTCDateTime(sel_data[5][sta][1][1]))
+
+                # append trace to stream
+                st_aft += temp_tr
+
+                # free memory
+                temp_tr = None
+
+
+            if st_aft.__nonzero__():
+                # filling no data with 0
+                st_aft.merge(fill_value=0)
+                print('\nTrimming Traces to specified time interval....')
+                # st_aft.trim(starttime=UTCDateTime(sel_data[5][sta][1][0]), endtime=UTCDateTime(sel_data[5][sta][1][1]))
+
+
+            print(st_bef)
+            print(st_aft)
+
+
+            print('Retrieving Data for QC-XCOR from nearest permanent metwork station.....')
+
+            client = Client("IRIS")
+            ref_inv = client.get_stations(network="AU",
+                                          starttime=UTCDateTime(st_bef[0].stats.starttime),
+                                          endtime=UTCDateTime(st_aft[0].stats.endtime),
+                                          latitude=inv[0][0].latitude,
+                                          longitude=inv[0][0].longitude,
+                                          maxradius=2,
+                                          level='channel')
+
+            print(ref_inv)
+
+            ref_sta_dict = {}
+            # go through ref stations and get data for closest station
+            for ref_sta_inv in ref_inv[0]:
+                # calculate diff
+                diff = math.sqrt(math.fabs(ref_sta_inv.latitude - inv[0][0].latitude)**2 + math.fabs(ref_sta_inv.longitude - inv[0][0].longitude)**2)
+                ref_sta_dict[ref_sta_inv.code] = diff
+
+            sorted_ref_sta = sorted(ref_sta_dict.items(), key=lambda x: x[1])
+            print(sorted_ref_sta)
+
+            close_ref_inv = ref_inv.select(channel="*Z", station=sorted_ref_sta[0][0])
+
+            print(close_ref_inv)
+
+            # now retreive data from IRIS
+            ref_st = Stream()
+            try:
+                ref_st += client.get_waveforms(network=close_ref_inv[0].code, station=close_ref_inv[0][0].code, channel='*Z', location='*',
+                                               starttime=UTCDateTime(sel_data[5][sta][0][0]),
+                                               endtime=UTCDateTime(sel_data[5][sta][0][1]))
+
+                ref_st += client.get_waveforms(network=close_ref_inv[0].code, station=close_ref_inv[0][0].code,
+                                               channel='*Z', location='*',
+                                               starttime=UTCDateTime(sel_data[5][sta][1][0]),
+                                               endtime=UTCDateTime(sel_data[5][sta][1][1]))
+            except FDSNException:
+                print("no data from IRIS")
+
+
+            print(ref_st)
+
+
+            # add data into ASDF file
+
+
+
 
 
 
