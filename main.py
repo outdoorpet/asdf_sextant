@@ -2139,6 +2139,18 @@ class Window(QtGui.QMainWindow):
         print('Retrieving Data for QC-XCOR from array.....')
         print(sel_data[5])
 
+        # set up a unique identifier counter
+        uid_counter = 0
+
+        # function to make a number into a 3 digit string with leading zeros
+        def make_threedig(a):
+            if len(a) == 1:
+                return '00' + a
+            elif len(a) == 2:
+                return '0' + a
+            return a
+
+
         # go through each selected station:
         for sta in sel_data[2]:
             print('..............')
@@ -2263,26 +2275,32 @@ class Window(QtGui.QMainWindow):
                                                starttime=UTCDateTime(sel_data[5][sta][1][0]),
                                                endtime=UTCDateTime(sel_data[5][sta][1][1]))
 
+                uid_counter += 1
+                bef_uid = uid_counter
+
                 # add data into asdf
-                xcor_ds.add_waveforms(ref_st_bef, tag="ref_data", labels=["region_1"])
-                xcor_ds.add_waveforms(ref_st_aft, tag="ref_data", labels=["region_2"])
+                xcor_ds.add_stationxml(close_ref_inv)
+                xcor_ds.add_waveforms(ref_st_bef, tag="id" + make_threedig(str(uid_counter)), labels=["region_1"])
+
+                uid_counter += 1
+                aft_uid = uid_counter
+
+                xcor_ds.add_waveforms(ref_st_aft, tag="id" + make_threedig(str(uid_counter)), labels=["region_2"])
+
+
+
             except FDSNException:
                 print("no data from IRIS or server is unavailable. Make sure proxy settings are set correctly")
+                uid_counter += 1
 
-
-            else:
-                # add data into ASDF file
-                print(ref_st_bef[0].get_id())
-                print(ref_st_bef[0].get_id().replace('.', '_').lower()+"_ref_data")
-                # add in station xml
-                xcor_ds.add_stationxml(close_ref_inv)
 
 
             # add the data from temporary stations
             for tr in st_bef:
-                xcor_ds.add_waveforms(tr, tag=ref_st_bef[0].get_id().replace('.', '_').lower()+"_ref_data", labels=["region_1"])
+                xcor_ds.add_waveforms(tr, tag="id" + make_threedig(str(bef_uid)), labels=["region_1"])
+
             for tr in st_aft:
-                xcor_ds.add_waveforms(tr, tag=ref_st_aft[0].get_id().replace('.', '_').lower()+"_ref_data", labels=["region_2"])
+                xcor_ds.add_waveforms(tr, tag="id" + make_threedig(str(aft_uid)), labels=["region_2"])
 
             #add in station xml
             xcor_ds.add_stationxml(select_inv)
