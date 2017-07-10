@@ -2277,6 +2277,7 @@ class Window(QtGui.QMainWindow):
 
                 uid_counter += 1
                 bef_uid = uid_counter
+                bef_sta = ref_st_bef[0].get_id()
 
                 # add data into asdf
                 xcor_ds.add_stationxml(close_ref_inv)
@@ -2284,6 +2285,7 @@ class Window(QtGui.QMainWindow):
 
                 uid_counter += 1
                 aft_uid = uid_counter
+                aft_sta = ref_st_bef[0].get_id()
 
                 xcor_ds.add_waveforms(ref_st_aft, tag="id" + make_threedig(str(uid_counter)), labels=["region_2"])
 
@@ -2297,10 +2299,10 @@ class Window(QtGui.QMainWindow):
 
             # add the data from temporary stations
             for tr in st_bef:
-                xcor_ds.add_waveforms(tr, tag="id" + make_threedig(str(bef_uid)), labels=["region_1"])
+                xcor_ds.add_waveforms(tr, tag="raw_recording", labels=["region_1", "id" + make_threedig(str(bef_uid)), bef_sta])
 
             for tr in st_aft:
-                xcor_ds.add_waveforms(tr, tag="id" + make_threedig(str(aft_uid)), labels=["region_2"])
+                xcor_ds.add_waveforms(tr, tag="raw_recording", labels=["region_2", "id" + make_threedig(str(aft_uid)), aft_sta])
 
             #add in station xml
             xcor_ds.add_stationxml(select_inv)
