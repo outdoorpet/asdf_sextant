@@ -2226,34 +2226,34 @@ class Window(QtGui.QMainWindow):
 
 
             print('Retrieving Data for QC-XCOR from nearest permanent metwork station.....')
-
-            client = Client("IRIS")
-            ref_inv = client.get_stations(network="AU",
-                                          starttime=UTCDateTime(st_bef[0].stats.starttime),
-                                          endtime=UTCDateTime(st_aft[0].stats.endtime),
-                                          latitude=inv[0][0].latitude,
-                                          longitude=inv[0][0].longitude,
-                                          maxradius=2,
-                                          level='channel')
-
-            print(ref_inv)
-
-            ref_sta_dict = {}
-            # go through ref stations and get data for closest station
-            for ref_sta_inv in ref_inv[0]:
-                # calculate diff
-                diff = math.sqrt(math.fabs(ref_sta_inv.latitude - inv[0][0].latitude)**2 + math.fabs(ref_sta_inv.longitude - inv[0][0].longitude)**2)
-                ref_sta_dict[ref_sta_inv.code] = diff
-
-            sorted_ref_sta = sorted(ref_sta_dict.items(), key=lambda x: x[1])
-            print(sorted_ref_sta)
-
-            close_ref_inv = ref_inv.select(channel="*Z", station=sorted_ref_sta[0][0])
-
-            print(close_ref_inv)
-
             # now retreive data from IRIS
             try:
+                client = Client("IRIS")
+                ref_inv = client.get_stations(network="AU",
+                                              starttime=UTCDateTime(st_bef[0].stats.starttime),
+                                              endtime=UTCDateTime(st_aft[0].stats.endtime),
+                                              latitude=inv[0][0].latitude,
+                                              longitude=inv[0][0].longitude,
+                                              maxradius=2,
+                                              level='channel')
+
+                print(ref_inv)
+
+                ref_sta_dict = {}
+                # go through ref stations and get data for closest station
+                for ref_sta_inv in ref_inv[0]:
+                    # calculate diff
+                    diff = math.sqrt(math.fabs(ref_sta_inv.latitude - inv[0][0].latitude)**2 + math.fabs(ref_sta_inv.longitude - inv[0][0].longitude)**2)
+                    ref_sta_dict[ref_sta_inv.code] = diff
+
+                sorted_ref_sta = sorted(ref_sta_dict.items(), key=lambda x: x[1])
+                print(sorted_ref_sta)
+
+                close_ref_inv = ref_inv.select(channel="*Z", station=sorted_ref_sta[0][0])
+
+                print(close_ref_inv)
+
+                # now retreive waveform data from IRIS
                 ref_st_bef = client.get_waveforms(network=close_ref_inv[0].code, station=close_ref_inv[0][0].code, channel='*Z', location='*',
                                                starttime=UTCDateTime(sel_data[5][sta][0][0]),
                                                endtime=UTCDateTime(sel_data[5][sta][0][1]))
@@ -2267,21 +2267,24 @@ class Window(QtGui.QMainWindow):
                 xcor_ds.add_waveforms(ref_st_bef, tag="ref_data", labels=["region_1"])
                 xcor_ds.add_waveforms(ref_st_aft, tag="ref_data", labels=["region_2"])
             except FDSNException:
-                print("no data from IRIS")
+                print("no data from IRIS or server is unavailable. Make sure proxy settings are set correctly")
 
 
+            else:
+                # add data into ASDF file
+                print(ref_st_bef[0].get_id())
+                print(ref_st_bef[0].get_id().replace('.', '_').lower()+"_ref_data")
+                # add in station xml
+                xcor_ds.add_stationxml(close_ref_inv)
 
-            # add data into ASDF file
-            print(ref_st_bef[0].get_id())
-            print(ref_st_bef[0].get_id().replace('.', '_').lower()+"_ref_data")
+
+            # add the data from temporary stations
             for tr in st_bef:
                 xcor_ds.add_waveforms(tr, tag=ref_st_bef[0].get_id().replace('.', '_').lower()+"_ref_data", labels=["region_1"])
             for tr in st_aft:
                 xcor_ds.add_waveforms(tr, tag=ref_st_aft[0].get_id().replace('.', '_').lower()+"_ref_data", labels=["region_2"])
 
             #add in station xml
-
-            xcor_ds.add_stationxml(close_ref_inv)
             xcor_ds.add_stationxml(select_inv)
 
 
