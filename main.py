@@ -150,6 +150,7 @@ class EqTableDialog(QtGui.QDialog):
     """
 
     # TODO: fix station highlight on map for EQ Table Dialog
+    # TODO: save the view state including zoom etc..
     def __init__(self, parent=None, cat_df=None):
         QtGui.QDialog.__init__(self, parent)
         self.tbldui = Ui_EqExtractionDialog()
@@ -1094,7 +1095,6 @@ class Window(QtGui.QMainWindow):
         self.build_tables()
 
 
-        # TODO: poulate dataframe table with catalogue under events tab - (Edit: make new window for earthquake catalogue)
         # TODO: add extract earthquake functionality similar to QC_events_ASDF GUI
 
         # add into new ASDF file
@@ -1947,8 +1947,6 @@ class Window(QtGui.QMainWindow):
     #             self.update_waveform_plot()
 
     def station_availability(self):
-        # TODO: add function to highlight interval for extraction on station availability plot
-        # TODO: add highlighting window that shows current plot view interval for which stations
 
         # go through JSON entries and find all gaps save them into dictionary
         self.recording_gaps = {}
