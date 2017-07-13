@@ -206,6 +206,7 @@ class DataAvailPlot(QtGui.QDialog):
         QtGui.QDialog.__init__(self, parent)
         self.davailui = Ui_DataAvailDialog()
         self.davailui.setupUi(self)
+        self.davailui.go_push_button.setEnabled(False)
 
         # self.data_avail_graph_view = pg.GraphicsLayoutWidget()
 
@@ -243,8 +244,17 @@ class DataAvailPlot(QtGui.QDialog):
             #prevent all ROI movement
             pass
 
+    def display_plot_view_region(self, start, end):
+        # reset the plot
+        self.plot_data()
+        self.lri = pg.LinearRegionItem(
+            values=[start, end])
+
+        self.plot.addItem(self.lri)
+        self.davailui.go_push_button.setEnabled(False)
 
     def on_sel_xcor_regions_push_button_released(self):
+        self.davailui.go_push_button.setEnabled(True)
 
         self.xtract_method = "xcor_region"
 
@@ -290,6 +300,7 @@ class DataAvailPlot(QtGui.QDialog):
         """
         Method to create a single Linear region for extracting data for all stations in view
         """
+        self.davailui.go_push_button.setEnabled(True)
         self.xtract_method = "view_region"
 
         # get the view range of the plot window [[xmin, xmax],[ymin, ymax]]
@@ -299,7 +310,7 @@ class DataAvailPlot(QtGui.QDialog):
         self.roi_dict = {}
 
         self.plot_data()
-        self.lri = pg.LinearRegionItem(values=[vr[0][0]+(60*60*24), vr[0][0]+(60*60*1)])
+        self.lri = pg.LinearRegionItem(values=[vr[0][0]+(60*60*24*40), vr[0][0]+(60*60*24*40) + (60*60*2)])
 
         self.plot.addItem(self.lri)
 
@@ -1227,6 +1238,11 @@ class Window(QtGui.QMainWindow):
         self._state["waveform_plots_min_value"] = min(min_values)
         self._state["waveform_plots_max_value"] = max(max_values)
 
+        # highlight the plotted region on station availability plot if it exists
+        if hasattr(self, 'data_avail_plot'):
+            self.data_avail_plot.display_plot_view_region(self._state["waveform_plots_min_time"].timestamp,
+                                                                   self._state["waveform_plots_max_time"].timestamp)
+
         for plot in self._state["waveform_plots"][1:]:
             plot.setXLink(self._state["waveform_plots"][0])
             plot.setYLink(self._state["waveform_plots"][0])
@@ -1871,7 +1887,7 @@ class Window(QtGui.QMainWindow):
             # the station selection dialog box was cancelled
             pass
 
-    # TODO: re-write eartquake extraction
+    # TODO: re-write earthquake extraction
     # def analyse_earthquake(self, event_obj):
     #     # Get event catalogue
     #     self.event_cat = self.ds.events
