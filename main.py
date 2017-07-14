@@ -250,7 +250,7 @@ class DataAvailPlot(QtGui.QDialog):
         # reset the plot
         self.plot_data()
         self.lri = pg.LinearRegionItem(
-            values=[start, end])
+            values=[start, end], brush='r', movable=False)
 
         self.plot.addItem(self.lri)
         self.davailui.go_push_button.setEnabled(False)
@@ -350,10 +350,14 @@ class DataAvailPlot(QtGui.QDialog):
             self.y_axis_string.setTicks([enum_sta])
 
     def plot_data(self):
+
+
         def get_sta_id(sta):
             return (self.sta_id_dict[sta])
 
         self.davailui.data_avail_graph_view.clear()
+
+
 
         # Set up the plotting area
         self.plot = self.davailui.data_avail_graph_view.addPlot(0, 0,
@@ -363,6 +367,10 @@ class DataAvailPlot(QtGui.QDialog):
         self.plot.setMouseEnabled(x=True, y=False)
         # When Mouse is moved over plot print the data coordinates
         self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
+
+        # Re-establish previous map_view_station if it exists
+        if self.saved_state:
+            self.plot.getViewBox().setState(self.saved_state)
 
         rec_midpoints = []
         sta_ids = []
@@ -604,6 +612,9 @@ class Window(QtGui.QMainWindow):
         # self.ui.openJSON_DB.triggered.connect(self.open_json_file)
         self.ui.openEQ_QuakeML.triggered.connect(self.open_EQ_cat)
         self.ui.actionStation_Availability.triggered.connect(self.station_availability)
+
+        # add in icon for reset waveform view button
+        self.ui.reset_view_push_button.setIcon(QtGui.QIcon('eLsS8.png'))
 
 
         # self.ui.actionXCOR.triggered.connect(self.get_xcor_data)
@@ -1114,12 +1125,78 @@ class Window(QtGui.QMainWindow):
                 mousePoint = vb.mapSceneToView(pos)
                 vLine.setPos(mousePoint.x())
 
+    def sort_method_selected(self, sort_pushButton, value, prev_view):
+        """
+        # Method to plot information on the scatter plot and to provide sort functionality
+        # All calls to update the waveform plot area should pass through here rather than calling update_waveform_plot
+        """
+
+        print("sort method selected")
+
+        # if prev_view:
+        #     try:
+        #         self.saved_state = self.plot.getViewBox().getState()
+        #     except AttributeError:
+        #         # Plot does not exist, i.e. it is the first time trying to call update_graph
+        #         self.saved_state = None
+        # elif not prev_view:
+        #     self.saved_state = None
+        # # if no sort:
+        # if value[1] == "no_sort":
+        #     sort_meth = None
+        #     sort_pushButton.setText("Sort")
+        #     unique_stations = self.picks_df['sta'].unique()
+        #
+        #     stn_list = unique_stations.tolist()
+        #     stn_list.sort()
+        #
+        #     self.axis_station_list = stn_list
+        # # if sort by station:
+        # elif value[1] == 0:
+        #     sort_pushButton.setText(value[0])
+        #     sort_meth = "station"
+        #     self.axis_station_list = np.sort(self.picks_df['sta'].unique())  # numpy array
+        # # if sort by gcarc
+        # elif value[1] == 1:
+        #     sort_pushButton.setText("Sorted by GCARC: " + value[0])
+        #     sort_meth = 'gcarc'
+        #     self.axis_station_list = self.spatial_dict[value[0]].sort_values(by='gcarc')['station'].tolist()
+        # # if sort by azimuth
+        # elif value[1] == 2:
+        #     sort_pushButton.setText("Sorted by AZ: " + value[0])
+        #     sort_meth = 'az'
+        #     self.axis_station_list = self.spatial_dict[value[0]].sort_values(by='az')['station'].tolist()
+        # # if sort by ep dist
+        # elif value[1] == 3:
+        #     sort_pushButton.setText("Sorted by Ep Dist: " + value[0])
+        #     sort_meth = 'ep_dist'
+        #     self.axis_station_list = self.spatial_dict[value[0]].sort_values(by='ep_dist')['station'].tolist()
+        #
+        # # use sort method unless it is None (i.e. No sort)
+        # if sort_meth:
+        #     self.axis_station_list = self.spatial_dict[value[0]].sort_values(by=sort_meth)['station'].tolist()
+        #
+        #     #sort the waveform if it exists
+        #     try:
+        #         self.waveform_st.sort(keys=[sort_meth])
+        #     except AttributeError:
+        #         # stream does not exist
+        #         pass
+        #
+        # # self.update_waveform_plot()
+
+    def on_reset_view_push_button_released(self):
+        """
+        Method to reset the waveform plot to initial
+        """
+        self.sort_method_selected(self.ui.sort_drop_down_button, ('no_sort', 'no_sort'), False)
+
     def update_waveform_plot(self):
         # TODO: add ability to decouple an axis
         # add picking functionality
         self.ui.central_tab.setCurrentIndex(0)
-        self.ui.initial_view_push_button.setEnabled(True)
-        self.ui.previous_view_push_button.setEnabled(True)
+        self.ui.reset_view_push_button.setEnabled(True)
+        self.ui.sort_drop_down_button.setEnabled(True)
         self.ui.previous_interval_push_button.setEnabled(True)
         self.ui.next_interval_push_button.setEnabled(True)
 
