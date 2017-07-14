@@ -50,7 +50,8 @@ from query_input_yes_no import query_yes_no
                  with each waveform that is slow.
                - made it so that only the upper levels of the Auxillary data are read on
                  start-up and lower down data is read on the fly
-               - need to change the station tree population to a similar method
+               - Also modified station information population to be on the fly below station level down
+               - Now using the JSON database to find unique channels and tags in asdf file
 """
 
 # load in Qt Designer UI files
@@ -750,10 +751,6 @@ class Window(QtGui.QMainWindow):
 
         # persistent list for all stations within ASDF file
         sta_list = []
-        # set with unique channel codes in survey/network
-        channel_codes_set = set()
-        # set with unique asdf tags for survey/network
-        tags_set = set()
 
         filename_item = QtGui.QTreeWidgetItem([self.ds_id],
                                               type=STATION_VIEW_ITEM_TYPES["FILE"])
@@ -781,75 +778,21 @@ class Window(QtGui.QMainWindow):
 
                 sta_list.append(station._station_name)
 
-
-
-                # get all of the tags for that station and append to set
-                for tag in self.ds.waveforms[station._station_name].get_waveform_tags():
-                    tags_set.add(tag)
-
-
-                # get stationxml (to channel level) for station
-                station_inv = station.StationXML[0][0]
-                # print(station_inv)
-
-                # add info children
-                station_children = [
-                    QtGui.QTreeWidgetItem(['StartDate: \t%s' % station_inv.start_date.strftime('%Y-%m-%dT%H:%M:%S')],
-                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
-                    QtGui.QTreeWidgetItem(['EndDate: \t%s' % station_inv.end_date.strftime('%Y-%m-%dT%H:%M:%S')],
-                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
-                    QtGui.QTreeWidgetItem(['Latitude: \t%s' % station_inv.latitude],
-                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
-                    QtGui.QTreeWidgetItem(['Longitude: \t%s' % station_inv.longitude],
-                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
-                    QtGui.QTreeWidgetItem(['Elevation: \t%s' % station_inv.elevation],
-                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"])]
-
-                station_item.addChildren(station_children)
-
-                # add channel items
-                for channel_inv in station_inv:
-                    # add the channel code to list
-                    channel_codes_set.add(channel_inv.code)
-
-                    channel_item = QtGui.QTreeWidgetItem(
-                        [channel_inv.code], type=STATION_VIEW_ITEM_TYPES["CHANNEL"])
-
-                    channel_children = [
-                        QtGui.QTreeWidgetItem(
-                            ['StartDate: \t%s' % station_inv.start_date.strftime('%Y-%m-%dT%H:%M:%S')],
-                            type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
-                        QtGui.QTreeWidgetItem(['EndDate: \t%s' % station_inv.end_date.strftime('%Y-%m-%dT%H:%M:%S')],
-                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
-                        QtGui.QTreeWidgetItem(['Location: \t%s' % channel_inv.location_code],
-                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
-                        QtGui.QTreeWidgetItem(['SamplRate: \t%s' % channel_inv.sample_rate],
-                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
-                        QtGui.QTreeWidgetItem(['Azimuth: \t%s' % channel_inv.azimuth],
-                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
-                        QtGui.QTreeWidgetItem(['Dip: \t%s' % channel_inv.dip],
-                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
-                        QtGui.QTreeWidgetItem(['Latitude: \t%s' % channel_inv.latitude],
-                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
-                        QtGui.QTreeWidgetItem(['Longitude: \t%s' % channel_inv.longitude],
-                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
-                        QtGui.QTreeWidgetItem(['Elevation: \t%s' % channel_inv.elevation],
-                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"])]
-
-                    channel_item.addChildren(channel_children)
-
-                    station_item.addChild(channel_item)
-
                 network_item.addChild(station_item)
             filename_item.addChild(network_item)
         items.append(filename_item)
 
         self.ui.station_view.insertTopLevelItems(0, items)
 
+        # get the unique channel codes and tags in ASDF file
+        unq_chan, unq_tags = self.ASDF_accessor[self.ds_id]["db"].get_unique_information()
+
+        print(unq_chan, unq_tags)
+
         # make the channel code set into list and make persistant
-        self.ASDF_accessor[self.ds_id]['channel_codes'] = list(channel_codes_set)
+        self.ASDF_accessor[self.ds_id]['channel_codes'] = unq_chan
         self.ASDF_accessor[self.ds_id]['sta_list'] = sta_list
-        self.ASDF_accessor[self.ds_id]['tags_list'] = list(tags_set)
+        self.ASDF_accessor[self.ds_id]['tags_list'] = unq_tags
         print("done Building station view")
 
     def build_auxillary_tree_view(self):
@@ -1382,6 +1325,58 @@ class Window(QtGui.QMainWindow):
             js_call = "highlightStation('{station}')".format(station=station)
             self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
 
+            # attempt to unpack children info
+            if item.childCount() == 0:
+                # get stationxml (to channel level) for station
+                print(station)
+                station_inv = self.ds.waveforms[station].StationXML[0][0]
+                print(station_inv)
+
+                # add info children
+                station_children = [
+                    QtGui.QTreeWidgetItem(['StartDate: \t%s' % station_inv.start_date.strftime('%Y-%m-%dT%H:%M:%S')],
+                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
+                    QtGui.QTreeWidgetItem(['EndDate: \t%s' % station_inv.end_date.strftime('%Y-%m-%dT%H:%M:%S')],
+                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
+                    QtGui.QTreeWidgetItem(['Latitude: \t%s' % station_inv.latitude],
+                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
+                    QtGui.QTreeWidgetItem(['Longitude: \t%s' % station_inv.longitude],
+                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"]),
+                    QtGui.QTreeWidgetItem(['Elevation: \t%s' % station_inv.elevation],
+                                          type=STATION_VIEW_ITEM_TYPES["STN_INFO"])]
+
+                item.addChildren(station_children)
+
+                # add channel items
+                for channel_inv in station_inv:
+
+                    channel_item = QtGui.QTreeWidgetItem(
+                        [channel_inv.code], type=STATION_VIEW_ITEM_TYPES["CHANNEL"])
+
+                    channel_children = [
+                        QtGui.QTreeWidgetItem(
+                            ['StartDate: \t%s' % station_inv.start_date.strftime('%Y-%m-%dT%H:%M:%S')],
+                            type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['EndDate: \t%s' % station_inv.end_date.strftime('%Y-%m-%dT%H:%M:%S')],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Location: \t%s' % channel_inv.location_code],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['SamplRate: \t%s' % channel_inv.sample_rate],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Azimuth: \t%s' % channel_inv.azimuth],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Dip: \t%s' % channel_inv.dip],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Latitude: \t%s' % channel_inv.latitude],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Longitude: \t%s' % channel_inv.longitude],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
+                        QtGui.QTreeWidgetItem(['Elevation: \t%s' % channel_inv.elevation],
+                                              type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"])]
+
+                    channel_item.addChildren(channel_children)
+
+                    item.addChild(channel_item)
 
 
         elif t == STATION_VIEW_ITEM_TYPES["CHANNEL"]:

@@ -206,6 +206,21 @@ class SeisDB(object):
         return (np.array([gaps_start_list, gaps_end_list]))
 
 
+    def get_unique_information(self):
+        """
+        Method to retreive the unique channels and tags within an ASDF file from the JSON Database
+        :return: (unique channels, unique tags)
+        """
+        assert self._json_loaded, "Invalid SeisDB object. Try loading a valid JSON file first."
+        assert self._valid_index, "Invalid SeisDB object. Index has not been generated."
+        if not self._use_numpy_index:
+            print("Must be using Numpy index")
+
+        else:
+            return (np.unique(self._indexed_np_array['cha']), np.unique(self._indexed_np_array['tag']))
+
+
+
 if __name__ == "__main__":
     print "Testing db access"
     sta = ["SQ2A1", "SQ2F6"]
