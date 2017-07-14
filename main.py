@@ -247,6 +247,9 @@ class DataAvailPlot(QtGui.QDialog):
             pass
 
     def display_plot_view_region(self, start, end):
+        # save the plot view state
+        self.saved_state = self.plot.getViewBox().getState()
+
         # reset the plot
         self.plot_data()
         self.lri = pg.LinearRegionItem(
@@ -369,7 +372,7 @@ class DataAvailPlot(QtGui.QDialog):
         self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
 
         # Re-establish previous map_view_station if it exists
-        if self.saved_state:
+        if hasattr(self, "saved_state"):
             self.plot.getViewBox().setState(self.saved_state)
 
         rec_midpoints = []
@@ -616,6 +619,14 @@ class Window(QtGui.QMainWindow):
         # add in icon for reset waveform view button
         self.ui.reset_view_push_button.setIcon(QtGui.QIcon('eLsS8.png'))
 
+        # disable buttons in the waveform plot view region
+        self.ui.reset_view_push_button.setEnabled(False)
+        self.ui.previous_interval_push_button.setEnabled(False)
+        self.ui.next_interval_push_button.setEnabled(False)
+        self.ui.sort_drop_down_button.setEnabled(False)
+        self.ui.references_push_button.setEnabled(False)
+        self.ui.detrend_and_demean_check_box.setEnabled(False)
+        self.ui.normalize_check_box.setEnabled(False)
 
         # self.ui.actionXCOR.triggered.connect(self.get_xcor_data)
 
@@ -1196,9 +1207,12 @@ class Window(QtGui.QMainWindow):
         # add picking functionality
         self.ui.central_tab.setCurrentIndex(0)
         self.ui.reset_view_push_button.setEnabled(True)
-        self.ui.sort_drop_down_button.setEnabled(True)
         self.ui.previous_interval_push_button.setEnabled(True)
         self.ui.next_interval_push_button.setEnabled(True)
+        self.ui.sort_drop_down_button.setEnabled(True)
+        self.ui.references_push_button.setEnabled(True)
+        self.ui.normalize_check_box.setEnabled(True)
+        self.ui.detrend_and_demean_check_box.setEnabled(True)
 
         # Get the filter settings.
         filter_settings = {}
@@ -1331,7 +1345,6 @@ class Window(QtGui.QMainWindow):
                                        ph_st=new_start_time,
                                        ph_et=new_end_time)
 
-
     def on_xcorr_push_button_released(self):
         """
         perform cross correlations of data in view with nearest permenant station data
@@ -1340,9 +1353,6 @@ class Window(QtGui.QMainWindow):
         # Get start and end time of data in view
         starttime = UTCDateTime(self._state["waveform_plots_min_time"])
         endtime = UTCDateTime(self._state["waveform_plots_max_time"])
-
-
-
 
     def reset_view(self):
         self._state["waveform_plots"][0].setXRange(
@@ -1597,7 +1607,6 @@ class Window(QtGui.QMainWindow):
 
             self.net_item_menu.addAction(select_action)
             self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
-
 
     def on_event_tree_widget_itemClicked(self, item, column):
         t = item.type()
@@ -2185,7 +2194,6 @@ class Window(QtGui.QMainWindow):
 
         elif ret[0] == "xcor_region":
             self.get_xcor_data(ret)
-
 
     def get_xcor_data(self, sel_data):
         """

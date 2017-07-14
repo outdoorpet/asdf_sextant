@@ -29,10 +29,7 @@
      <verstretch>0</verstretch>
     </sizepolicy>
    </property>
-   <layout class="QVBoxLayout" name="verticalLayout">
-    <item>
-     <layout class="QHBoxLayout" name="horizontalLayout"/>
-    </item>
+   <layout class="QHBoxLayout" name="horizontalLayout_13">
     <item>
      <widget class="QTabWidget" name="central_tab">
       <property name="currentIndex">
@@ -92,22 +89,15 @@
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_2">
             <item>
-             <widget class="QPushButton" name="initial_view_push_button">
+             <widget class="QPushButton" name="reset_view_push_button">
               <property name="enabled">
                <bool>false</bool>
               </property>
-              <property name="text">
-               <string>Initial View</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="previous_view_push_button">
-              <property name="enabled">
-               <bool>false</bool>
+              <property name="toolTip">
+               <string>Reset the waveform plot view</string>
               </property>
               <property name="text">
-               <string>Previous View</string>
+               <string/>
               </property>
              </widget>
             </item>
@@ -172,12 +162,9 @@
              </spacer>
             </item>
             <item>
-             <widget class="QPushButton" name="xcorr_push_button">
-              <property name="toolTip">
-               <string>Perform Cross-Correlation of data in view with data from nearest permanent station</string>
-              </property>
+             <widget class="QPushButton" name="sort_drop_down_button">
               <property name="text">
-               <string>XCORR</string>
+               <string>Sort</string>
               </property>
              </widget>
             </item>
@@ -402,6 +389,9 @@
       </widget>
      </widget>
     </item>
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout"/>
+    </item>
    </layout>
   </widget>
   <widget class="QStatusBar" name="status_bar"/>
@@ -432,7 +422,6 @@
     </property>
     <addaction name="actionFilter"/>
     <addaction name="actionStation_Availability"/>
-    <addaction name="actionXCOR"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
