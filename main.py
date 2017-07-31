@@ -87,10 +87,10 @@ AUX_DATA_ITEM_TYPES = {
     "DATA_TYPE": 0,
     "DATA_ITEM": 1}
 
-
 # Default to antialiased drawing.
 pg.setConfigOptions(antialias=True, foreground=(200, 200, 200),
                     background=None)
+
 
 def sizeof_fmt(num):
     """
@@ -104,22 +104,26 @@ def sizeof_fmt(num):
         num /= 1024.0
     return "%3.1f %s" % (num, "TB")
 
+
 class PandasModel(QtCore.QAbstractTableModel):
     """
     Class to populate a table view with a pandas dataframe
     """
 
-    def __init__(self, data, cat_nm=None, parent=None):
+    def __init__(self, data, cat_nm=None, trace_nm=None, parent=None):
         QtCore.QAbstractTableModel.__init__(self, parent)
         self._data = np.array(data.values)
         self._cols = data.columns
         self.r, self.c = np.shape(self._data)
 
         self.cat_nm = cat_nm
+        self.trace_nm = trace_nm
 
         # Column headers for tables
         self.cat_col_header = ['Event ID', 'Time (UTC Timestamp)', 'Lat (dd)', 'Lon  (dd)',
                                'Depth (km)', 'Mag', 'Time (UTC)', 'Julian Day']
+        self.trace_col_header = ["ASDF ID", "ID", "Channel", "Trace Start (UTC)", "Trace End (UTC)",
+                                 "Trace Start Timestamp (UTC)", "Trace End Timestamp (UTC)", "Trace ASDF Tag"]
 
     def rowCount(self, parent=None):
         return self.r
@@ -139,11 +143,41 @@ class PandasModel(QtCore.QAbstractTableModel):
             if orientation == QtCore.Qt.Horizontal:
                 if not self.cat_nm == None:
                     return self.cat_col_header[p_int]
-                elif not self.pick_nm == None:
-                    return self.pick_col_header[p_int]
+                elif not self.trace_nm == None:
+                    return self.trace_col_header[p_int]
             elif orientation == QtCore.Qt.Vertical:
                 return p_int
         return None
+
+class TraceTableDialog(QtGui.QDialog):
+    """
+      Class to create a separate child window to display the traces for a sttaion on a table
+      """
+    def __init__(self, parent=None, trace_df=None):
+        super(TraceTableDialog, self).__init__(parent)
+
+        self.trace_df = trace_df
+
+        self.initUI()
+
+    def initUI(self):
+        self.layout = QtGui.QVBoxLayout(self)
+
+        self.trace_table_view = QtGui.QTableView()
+
+        self.trace_table_view.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+
+        self.layout.addWidget(self.trace_table_view)
+
+        self.setLayout(self.layout)
+
+        # Populate the tables using the custom Pandas table class
+        self.trace_model = PandasModel(self.trace_df, trace_nm=True)
+
+        self.trace_table_view.setModel(self.trace_model)
+
+        self.setWindowTitle('Trace Table')
+        self.show()
 
 
 class EqTableDialog(QtGui.QDialog):
@@ -241,10 +275,10 @@ class DataAvailPlot(QtGui.QDialog):
         :param sta_id: id number (int) of the station that the roi is associated with
         """
         if active:
-            if roi.pos()[1] != sta_id-0.3:
-                roi.setPos(pg.Point(roi.pos()[0], sta_id-0.3), update=False)
+            if roi.pos()[1] != sta_id - 0.3:
+                roi.setPos(pg.Point(roi.pos()[0], sta_id - 0.3), update=False)
         else:
-            #prevent all ROI movement
+            # prevent all ROI movement
             pass
 
     def display_plot_view_region(self, start, end):
@@ -274,17 +308,17 @@ class DataAvailPlot(QtGui.QDialog):
         self.roi_dict = {}
 
         for key, sta_id in self.sta_id_dict.iteritems():
-
             bef_roi_pen = QtGui.QPen()
             bef_roi_pen.setColor(QtCore.Qt.green)
 
-            bef_roi = pg.ROI(pos=[vr[0][0]+(60*60*24), sta_id-0.3], size=[60*60*24, 0.6], pen=bef_roi_pen)
+            bef_roi = pg.ROI(pos=[vr[0][0] + (60 * 60 * 24), sta_id - 0.3], size=[60 * 60 * 24, 0.6], pen=bef_roi_pen)
             bef_roi.addScaleHandle([0, 0.5], [0.5, 0.5])
             bef_roi.setZValue(0)
 
             aft_roi_pen = QtGui.QPen()
             aft_roi_pen.setColor(QtCore.Qt.yellow)
-            aft_roi = pg.ROI(pos=[vr[0][1]-(60*60*24*2), sta_id-0.3], size=[60*60*24, 0.6], pen=aft_roi_pen)
+            aft_roi = pg.ROI(pos=[vr[0][1] - (60 * 60 * 24 * 2), sta_id - 0.3], size=[60 * 60 * 24, 0.6],
+                             pen=aft_roi_pen)
             aft_roi.addScaleHandle([1, 0.5], [0.5, 0.5])
             aft_roi.setZValue(0)
 
@@ -316,7 +350,8 @@ class DataAvailPlot(QtGui.QDialog):
         self.roi_dict = {}
 
         self.plot_data()
-        self.lri = pg.LinearRegionItem(values=[vr[0][0]+(60*60*24*40), vr[0][0]+(60*60*24*40) + (60*60*2)])
+        self.lri = pg.LinearRegionItem(
+            values=[vr[0][0] + (60 * 60 * 24 * 40), vr[0][0] + (60 * 60 * 24 * 40) + (60 * 60 * 2)])
 
         self.plot.addItem(self.lri)
 
@@ -330,10 +365,10 @@ class DataAvailPlot(QtGui.QDialog):
 
     def select_data(self):
         # Launch the custom station/component selection dialog
-        sel_dlg = selectionDialog(parent=self, net_list=self.net_list, sta_list=self.sta_list, chan_list=self.chan_list, tags_list=self.tags_list)
+        sel_dlg = selectionDialog(parent=self, net_list=self.net_list, sta_list=self.sta_list, chan_list=self.chan_list,
+                                  tags_list=self.tags_list)
         if sel_dlg.exec_():
             self.select_net, self.select_sta, self.select_comp, self.select_tags = sel_dlg.getSelected()
-
 
             # new list of stations nn.sssss format with only those in selected stations
             net_sta_list = []
@@ -355,19 +390,16 @@ class DataAvailPlot(QtGui.QDialog):
 
     def plot_data(self):
 
-
         def get_sta_id(sta):
             return (self.sta_id_dict[sta])
 
         self.davailui.data_avail_graph_view.clear()
 
-
-
         # Set up the plotting area
         self.plot = self.davailui.data_avail_graph_view.addPlot(0, 0,
-                                                       axisItems={'bottom': DateAxisItem(orientation='bottom',
-                                                                                         utcOffset=0),
-                                                                  'left': self.y_axis_string})
+                                                                axisItems={'bottom': DateAxisItem(orientation='bottom',
+                                                                                                  utcOffset=0),
+                                                                           'left': self.y_axis_string})
         self.plot.setMouseEnabled(x=True, y=False)
         # When Mouse is moved over plot print the data coordinates
         self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
@@ -388,7 +420,7 @@ class DataAvailPlot(QtGui.QDialog):
 
             # iterate through gaps list
             for _i in range(rec_array.shape[1]):
-                diff_frm_mid = (rec_array[1,_i] - rec_array[0, _i]) / 2.0
+                diff_frm_mid = (rec_array[1, _i] - rec_array[0, _i]) / 2.0
 
                 diff_frm_mid_list.append(diff_frm_mid)
 
@@ -416,13 +448,14 @@ class DataAvailPlot(QtGui.QDialog):
             roi_left_x = r.pos()[0]
             roi_width = r.size()[0]
 
-            return(roi_left_x, roi_left_x+roi_width)
+            return (roi_left_x, roi_left_x + roi_width)
 
         if self.xtract_method == "view_region":
             # make the region non moveable now
             self.lri.setMovable(False)
             # get the start and end time of extraction region and also return desired net/sta/chan and tags
-            return (self.xtract_method, self.select_net, self.select_sta, self.select_comp, self.select_tags, self.lri.getRegion())
+            return (self.xtract_method, self.select_net, self.select_sta, self.select_comp, self.select_tags,
+                    self.lri.getRegion())
         elif self.xtract_method == "xcor_region":
             roi_limits_dict = {}
             # go through all rois and get edges
@@ -435,7 +468,8 @@ class DataAvailPlot(QtGui.QDialog):
                 # aft_roi.sigRegionChanged.connect(functools.partial(self.control_roi_translate, aft_roi, False, sta_id))
 
                 roi_limits_dict[key.split('.')[1]] = (get_left_right_roi(bef_roi), get_left_right_roi(aft_roi))
-            return (self.xtract_method, self.select_net, self.select_sta, self.select_comp, self.select_tags, roi_limits_dict)
+            return (
+            self.xtract_method, self.select_net, self.select_sta, self.select_comp, self.select_tags, roi_limits_dict)
         else:
             # no extraction region
             return None
@@ -448,7 +482,8 @@ class selectionDialog(QtGui.QDialog):
     http://stackoverflow.com/questions/35611199/creating-a-toggling-check-all-checkbox-for-a-listview
     '''
 
-    def __init__(self, parent=None, net_list=None, sta_list=None, chan_list=None, tags_list=None, ph_start=None, ph_end=None):
+    def __init__(self, parent=None, net_list=None, sta_list=None, chan_list=None, tags_list=None, ph_start=None,
+                 ph_end=None):
         QtGui.QDialog.__init__(self, parent)
         self.selui = Ui_SelectDialog()
         self.selui.setupUi(self)
@@ -457,7 +492,7 @@ class selectionDialog(QtGui.QDialog):
         # Set all check box to checked
         # self.selui.check_all.setChecked(True)
 
-        if not ph_start==None and not ph_end==None:
+        if not ph_start == None and not ph_end == None:
             self.selui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
             self.selui.endtime.setDateTime(QtCore.QDateTime.fromString(ph_end, "yyyy-MM-ddThh:mm:ss"))
             self.no_time = False
@@ -643,7 +678,6 @@ class Window(QtGui.QMainWindow):
 
         QtGui.QApplication.instance().focusChanged.connect(self.changed_widget_focus)
 
-
         tmp = tempfile.mkstemp("asdf_sextant")
         os.close(tmp[0])
         try:
@@ -713,7 +747,7 @@ class Window(QtGui.QMainWindow):
             if event.origins:
                 org = event.preferred_origin() or event.origins[0]
 
-                js_call = "addEvent('{event_id}', {latitude}, {longitude});"\
+                js_call = "addEvent('{event_id}', {latitude}, {longitude});" \
                     .format(event_id=event.resource_id.id,
                             latitude=org.latitude,
                             longitude=org.longitude)
@@ -831,7 +865,6 @@ class Window(QtGui.QMainWindow):
                 [data_type],
                 type=AUX_DATA_ITEM_TYPES["DATA_TYPE"])
 
-
             # get children one level down
             children = []
             for sub_item in self.ds.auxiliary_data[data_type].list():
@@ -840,7 +873,6 @@ class Window(QtGui.QMainWindow):
                     type=AUX_DATA_ITEM_TYPES["DATA_TYPE"])
                 children.append(child_item)
             data_type_item.addChildren(children)
-
 
             items.append(data_type_item)
         self.ui.auxiliary_data_tree_view.insertTopLevelItems(0, items)
@@ -897,7 +929,7 @@ class Window(QtGui.QMainWindow):
 
         for waveform in obj.list():
             if not waveform.endswith(
-                    "__" + self._state["current_waveform_tag"]):
+                            "__" + self._state["current_waveform_tag"]):
                 continue
             menu = popup.addMenu(waveform)
             attributes = dict(
@@ -928,7 +960,7 @@ class Window(QtGui.QMainWindow):
                     get_action_fct())
 
         popup.exec_(self.ui.references_push_button.parentWidget().mapToGlobal(
-                    self.ui.references_push_button.pos()))
+            self.ui.references_push_button.pos()))
 
     def read_ASDF_info(self):
         print("Reading ASDF Info....")
@@ -1035,7 +1067,6 @@ class Window(QtGui.QMainWindow):
         # create empty data frame
         self.cat_df = pd.DataFrame(data=None, columns=['event_id', 'qtime', 'lat', 'lon', 'depth', 'mag'])
 
-
         # iterate through the events
         for _i, event in enumerate(cat):
             # Get quake origin info
@@ -1049,8 +1080,8 @@ class Window(QtGui.QMainWindow):
                 magnitude = None
 
             self.cat_df.loc[_i] = [str(event.resource_id.id).split('=')[1], int(origin_info.time.timestamp),
-                              origin_info.latitude, origin_info.longitude,
-                              origin_info.depth / 1000, magnitude]
+                                   origin_info.latitude, origin_info.longitude,
+                                   origin_info.depth / 1000, magnitude]
 
         self.cat_df.reset_index(drop=True, inplace=True)
 
@@ -1084,8 +1115,8 @@ class Window(QtGui.QMainWindow):
         chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
         tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
 
-        xtract_start = UTCDateTime(self.selected_row['qtime'] - 5*60)
-        xtract_end = UTCDateTime(self.selected_row['qtime'] + 55*60)
+        xtract_start = UTCDateTime(self.selected_row['qtime'] - 5 * 60)
+        xtract_end = UTCDateTime(self.selected_row['qtime'] + 55 * 60)
 
         self.rc_menu = QtGui.QMenu(self)
         self.rc_menu.addAction('Extract Earthquake Into ASDF', functools.partial(
@@ -1096,10 +1127,32 @@ class Window(QtGui.QMainWindow):
             tags_list=tags_list,
             ph_st=str(xtract_start).split('.')[0],
             ph_et=str(xtract_end).split('.')[0]))
-            # event_id=self.selected_row['event_id'],
-            # event_df=self.selected_row))
+        # event_id=self.selected_row['event_id'],
+        # event_df=self.selected_row))
 
         self.rc_menu.popup(QtGui.QCursor.pos())
+
+
+    def trace_tbl_view_popup(self):
+        focus_widget = QtGui.QApplication.focusWidget()
+
+        # get the selected row number
+        row_number = focus_widget.selectionModel().selectedRows()[0].row()
+
+        self.selected_row = self.trace_df.loc[row_number]
+
+        trace_id = self.selected_row["ASDF_id"]
+
+        rc_menu = QtGui.QMenu(self)
+        rc_menu.addAction("Plot Trace", functools.partial(self.trace_selected(trace_id)))
+
+        rc_menu.popup(QtGui.QCursor.pos())
+
+    def trace_selected(self, trace_id):
+        self.st = self.sta_accessor[trace_id]
+
+        print(self.st)
+
 
     def build_tables(self):
 
@@ -1113,7 +1166,7 @@ class Window(QtGui.QMainWindow):
 
         dropped_cat_df[['Q_time_str', 'julday']] = dropped_cat_df.apply(mk_cat_UTC_str, axis=1)
 
-         #tbld table dialog
+        # tbld table dialog
         self.tbld = EqTableDialog(parent=self, cat_df=dropped_cat_df)
 
         self.tbld.tbldui.EQ_xtract_tableView.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -1252,7 +1305,7 @@ class Window(QtGui.QMainWindow):
             temp_st.normalize()
 
         if filter_settings["bpfilter"]:
-            temp_st.filter("bandpass",freqmin = 0.01, freqmax = 10)
+            temp_st.filter("bandpass", freqmin=0.01, freqmax=10)
 
         self.ui.graph.clear()
         self.ui.graph.setMinimumPlotHeight(200)
@@ -1272,10 +1325,10 @@ class Window(QtGui.QMainWindow):
                                                   utcOffset=0)})
             plot.show()
             self._state["waveform_plots"].append(plot)
-            self._state["station_id"].append(tr.stats.network+'.'+
-                                               tr.stats.station+'.'+
-                                               tr.stats.location+'.'+
-                                               tr.stats.channel)
+            self._state["station_id"].append(tr.stats.network + '.' +
+                                             tr.stats.station + '.' +
+                                             tr.stats.location + '.' +
+                                             tr.stats.channel)
             self._state["station_tag"].append(str(tr.stats.asdf.tag))
             plot.plot(tr.times() + tr.stats.starttime.timestamp, tr.data)
             starttimes.append(tr.stats.starttime)
@@ -1296,7 +1349,7 @@ class Window(QtGui.QMainWindow):
         # highlight the plotted region on station availability plot if it exists
         if hasattr(self, 'data_avail_plot'):
             self.data_avail_plot.display_plot_view_region(self._state["waveform_plots_min_time"].timestamp,
-                                                                   self._state["waveform_plots_max_time"].timestamp)
+                                                          self._state["waveform_plots_max_time"].timestamp)
 
         for plot in self._state["waveform_plots"][1:]:
             plot.setXLink(self._state["waveform_plots"][0])
@@ -1457,7 +1510,6 @@ class Window(QtGui.QMainWindow):
 
                 # add channel items
                 for channel_inv in station_inv:
-
                     channel_item = QtGui.QTreeWidgetItem(
                         [channel_inv.code], type=STATION_VIEW_ITEM_TYPES["CHANNEL"])
 
@@ -1538,8 +1590,6 @@ class Window(QtGui.QMainWindow):
             chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
             tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
 
-
-
             self.net_item_menu = QtGui.QMenu(self)
             select_action = QtGui.QAction('Select NSCL', self)
             select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False,
@@ -1548,7 +1598,8 @@ class Window(QtGui.QMainWindow):
                                                                                    chan_list=chan_list,
                                                                                    tags_list=tags_list,
                                                                                    ph_st=str(net_st).split('.')[0],
-                                                                                   ph_et=str(net_st + 60*60).split('.')[0]))
+                                                                                   ph_et=
+                                                                                   str(net_st + 60 * 60).split('.')[0]))
 
             self.net_item_menu.addAction(select_action)
             self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
@@ -1559,7 +1610,6 @@ class Window(QtGui.QMainWindow):
             if not self.db:
                 print("No DB is Loaded!!")
                 return
-
 
             net_list = [station.split('.')[0]]
             sta_list = [station.split('.')[1]]
@@ -1581,6 +1631,8 @@ class Window(QtGui.QMainWindow):
             # self.create_asdf_sql(station)
 
             self.net_item_menu = QtGui.QMenu(self)
+
+            # extract waveforms for station action
             select_action = QtGui.QAction('Extract Waveforms for Station', self)
             select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False,
                                                                                    net_list=net_list,
@@ -1592,13 +1644,19 @@ class Window(QtGui.QMainWindow):
                                                                                    str(net_st + 60 * 60).split('.')[0]))
 
             self.net_item_menu.addAction(select_action)
+
+            # station trace explorer action
+            trace_explore_action = QtGui.QAction('Trace Explorer', self)
+            trace_explore_action.triggered.connect(lambda: self.trace_explorer(sta))
+
+            self.net_item_menu.addAction(trace_explore_action)
+
             self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
 
         elif t == STATION_VIEW_ITEM_TYPES["CHANNEL"]:
             station_item = item.parent()
             station = get_station(station_item)
             channel = item.text(0)
-
 
             net_list = [station.split('.')[0]]
             sta_list = [station.split('.')[1]]
@@ -1889,6 +1947,51 @@ class Window(QtGui.QMainWindow):
         js_call = "setAllInactive()"
         self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
 
+    def trace_explorer(self, sta_accessor):
+        """
+        Method to look at traces for a selected station in a table view
+        Traces can then be plotted
+        :param sta_accessor: the station accessor object
+        :return:
+        """
+
+        self.sta_accessor = sta_accessor
+
+        # get a list of all waveforms in ASDF file
+        trace_list = self.sta_accessor.list()
+        # remove the station XML entry
+        trace_list.remove("StationXML")
+
+        # now make pandas dataframe sorted by startdate and split into information
+        # create empty data frame
+        self.trace_df = pd.DataFrame(data=None, columns=['ASDF_id', 'id', 'channel', 'start_UTC', 'end_UTC', 'start_timestamp', 'end_timestamp', 'tag'])
+
+        # iterate through trace_list
+        for _i, trace in enumerate(trace_list):
+            info = trace.split('__')
+            id = info[0]
+            channel = id.split('.')[3]
+
+            start_timestamp = UTCDateTime(info[1]).timestamp
+            end_timestamp = UTCDateTime(info[2]).timestamp
+
+            tag = info[3]
+
+            self.trace_df.loc[_i] = [trace, id, channel, UTCDateTime(start_timestamp).ctime(),
+                                 UTCDateTime(end_timestamp).ctime(), start_timestamp, end_timestamp, tag]
+
+        self.trace_df.sort_values(by='start_UTC', inplace=True)
+        self.trace_df.reset_index(drop=True, inplace=True)
+        print(self.trace_df)
+
+        # create table in new window
+        self.trace_tbld = TraceTableDialog(parent=self, trace_df=self.trace_df)
+
+        # make trace table right clickable for plotting
+        self.trace_tbld.trace_table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.trace_tbld.trace_table_view.customContextMenuRequested.connect(self.trace_tbl_view_popup)
+
+
     def extract_waveform_frm_ASDF(self, override, **kwargs):
         # Open a new st object
         self.st = Stream()
@@ -1913,7 +2016,6 @@ class Window(QtGui.QMainWindow):
             query = self.db.queryByTime(net_list, sta_list, chan_list, tags_list, interval_tuple[0], interval_tuple[1])
 
             for matched_info in query.values():
-
                 # read the data from the ASDF into stream
                 temp_tr = self.ds.waveforms[matched_info["new_network"] + '.' + matched_info["new_station"]][
                     matched_info["ASDF_tag"]][0]
@@ -1939,7 +2041,6 @@ class Window(QtGui.QMainWindow):
 
                 interval_tuple = (st.timestamp, et.timestamp)
 
-
                 print('---------------------------------------')
                 print('Finding Data for specified time interval.....')
 
@@ -1950,13 +2051,15 @@ class Window(QtGui.QMainWindow):
                 # print(UTCDateTime(interval_tuple[0]))
                 # print(UTCDateTime(interval_tuple[1]))
 
-                query = self.db.queryByTime(select_net, select_sta, select_chan, select_tags, interval_tuple[0], interval_tuple[1])
+                query = self.db.queryByTime(select_net, select_sta, select_chan, select_tags, interval_tuple[0],
+                                            interval_tuple[1])
 
                 for matched_info in query.values():
                     # print(matched_info["ASDF_tag"])
 
                     # read the data from the ASDF into stream
-                    temp_tr = self.ds.waveforms[matched_info["new_network"] + '.' + matched_info["new_station"]][matched_info["ASDF_tag"]][0]
+                    temp_tr = self.ds.waveforms[matched_info["new_network"] + '.' + matched_info["new_station"]][
+                        matched_info["ASDF_tag"]][0]
 
                     # trim trace to start and endtime
                     temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
@@ -1968,7 +2071,7 @@ class Window(QtGui.QMainWindow):
                     temp_tr = None
 
         try:
-            #TODO: Test if i need to do the final trim...
+            # TODO: Test if i need to do the final trim...
 
             if self.st.__nonzero__():
                 # Attempt to merge all traces with matching ID'S in place
@@ -1984,8 +2087,8 @@ class Window(QtGui.QMainWindow):
                 msg.setIcon(QtGui.QMessageBox.Critical)
                 msg.setText("No Data for Requested Time Interval")
                 msg.setDetailedText("There are no waveforms to display for selected time interval:"
-                                    "\nStart Time = "+str(UTCDateTime(interval_tuple[0],precision=0))+
-                                    "\nEnd Time =   "+str(UTCDateTime(interval_tuple[1],precision=0)))
+                                    "\nStart Time = " + str(UTCDateTime(interval_tuple[0], precision=0)) +
+                                    "\nEnd Time =   " + str(UTCDateTime(interval_tuple[1], precision=0)))
                 msg.setWindowTitle("Extract Time Error")
                 msg.setStandardButtons(QtGui.QMessageBox.Ok)
                 msg.exec_()
@@ -2120,7 +2223,7 @@ class Window(QtGui.QMainWindow):
             #     continue
 
             print("\r Working on Station: " + station + ", " + str(_i + 1) + " of " + \
-            str(len(net_sta_list)) + " Stations",)
+                  str(len(net_sta_list)) + " Stations", )
             sys.stdout.flush()
 
             gaps_array = self.db.get_recording_intervals(sta=sta, chan=chan)
@@ -2162,12 +2265,11 @@ class Window(QtGui.QMainWindow):
                         temp_start_int.append(gap_end)
                         temp_end_int.append(rec_end)
 
-                    elif not _j == 0 and not _j == gaps_no -1:
+                    elif not _j == 0 and not _j == gaps_no - 1:
                         # print(UTCDateTime(gaps_list[_j-1]['gap_end']).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
                         temp_start_int.append(prev_endtime)
                         temp_end_int.append(gap_start)
                         prev_endtime = gap_end
-
 
             # the [1] element of shape is the number of intervals
             rec_int_array = np.array([temp_start_int, temp_end_int])
@@ -2212,11 +2314,11 @@ class Window(QtGui.QMainWindow):
 
         if ret[0] == "view_region":
             self.extract_waveform_frm_ASDF(True, net_list=ret[1],
-                                       sta_list=ret[2],
-                                       chan_list=ret[3],
-                                       tags_list=ret[4],
-                                       ph_st=UTCDateTime(ret[5][0]),
-                                       ph_et=UTCDateTime(ret[5][1]))
+                                           sta_list=ret[2],
+                                           chan_list=ret[3],
+                                           tags_list=ret[4],
+                                           ph_st=UTCDateTime(ret[5][0]),
+                                           ph_et=UTCDateTime(ret[5][1]))
 
         elif ret[0] == "xcor_region":
             self.get_xcor_data(ret)
@@ -2233,14 +2335,14 @@ class Window(QtGui.QMainWindow):
         if not xcor_asdf_file:
             return
 
-        #check if the given filename has a .h5 extension
+        # check if the given filename has a .h5 extension
         if '.' in xcor_asdf_file:
             if not xcor_asdf_file.split('.')[1] == 'h5':
                 xcor_asdf_file = xcor_asdf_file.split('.')[0] + '.h5'
             else:
                 pass
         else:
-            xcor_asdf_file = xcor_asdf_file+'.h5'
+            xcor_asdf_file = xcor_asdf_file + '.h5'
 
         print(xcor_asdf_file)
 
@@ -2248,7 +2350,6 @@ class Window(QtGui.QMainWindow):
 
         if os.path.exists(xcor_asdf_file):
             os.remove(xcor_asdf_file)
-
 
         # open up new ASDF file for the xcorr data
         xcor_ds = pyasdf.ASDFDataSet(xcor_asdf_file)
@@ -2270,19 +2371,17 @@ class Window(QtGui.QMainWindow):
                 return '0' + a
             return a
 
-
         # go through each selected station:
         for sta in sel_data[2]:
             print('..............')
             print(sta)
 
-
             # get the station xml for station
-            net_sta = sel_data[1][0]+'.'+sta
+            net_sta = sel_data[1][0] + '.' + sta
 
             print(net_sta)
 
-            #sta_accessor
+            # sta_accessor
             sta_accessor = self.ds.waveforms[net_sta]
 
             inv = sta_accessor.StationXML
@@ -2293,13 +2392,11 @@ class Window(QtGui.QMainWindow):
             print(inv[0][0].longitude)
             print(inv[0][0].elevation)
 
-
-
             st_bef = Stream()
 
             # query the asdf file for data within the before roi
-            query = self.db.queryByTime(sel_data[1], [sta], sel_data[3], sel_data[4], sel_data[5][sta][0][0], sel_data[5][sta][0][1])
-
+            query = self.db.queryByTime(sel_data[1], [sta], sel_data[3], sel_data[4], sel_data[5][sta][0][0],
+                                        sel_data[5][sta][0][1])
 
             for matched_info in query.values():
                 # print(matched_info["ASDF_tag"])
@@ -2315,7 +2412,6 @@ class Window(QtGui.QMainWindow):
 
                 # free memory
                 temp_tr = None
-
 
             if st_bef.__nonzero__():
                 # filling no data with 0
@@ -2345,17 +2441,14 @@ class Window(QtGui.QMainWindow):
                 # free memory
                 temp_tr = None
 
-
             if st_aft.__nonzero__():
                 # filling no data with 0
                 st_aft.merge(fill_value=0)
                 print('\nTrimming Traces to specified time interval....')
                 # st_aft.trim(starttime=UTCDateTime(sel_data[5][sta][1][0]), endtime=UTCDateTime(sel_data[5][sta][1][1]))
 
-
             print(st_bef)
             print(st_aft)
-
 
             print('Retrieving Data for QC-XCOR from nearest permanent metwork station.....')
             # now retreive data from IRIS
@@ -2375,7 +2468,8 @@ class Window(QtGui.QMainWindow):
                 # go through ref stations and get data for closest station
                 for ref_sta_inv in ref_inv[0]:
                     # calculate diff
-                    diff = math.sqrt(math.fabs(ref_sta_inv.latitude - inv[0][0].latitude)**2 + math.fabs(ref_sta_inv.longitude - inv[0][0].longitude)**2)
+                    diff = math.sqrt(math.fabs(ref_sta_inv.latitude - inv[0][0].latitude) ** 2 + math.fabs(
+                        ref_sta_inv.longitude - inv[0][0].longitude) ** 2)
                     ref_sta_dict[ref_sta_inv.code] = diff
 
                 sorted_ref_sta = sorted(ref_sta_dict.items(), key=lambda x: x[1])
@@ -2386,14 +2480,15 @@ class Window(QtGui.QMainWindow):
                 print(close_ref_inv)
 
                 # now retreive waveform data from IRIS
-                ref_st_bef = client.get_waveforms(network=close_ref_inv[0].code, station=close_ref_inv[0][0].code, channel='*Z', location='*',
-                                               starttime=UTCDateTime(sel_data[5][sta][0][0]),
-                                               endtime=UTCDateTime(sel_data[5][sta][0][1]))
+                ref_st_bef = client.get_waveforms(network=close_ref_inv[0].code, station=close_ref_inv[0][0].code,
+                                                  channel='*Z', location='*',
+                                                  starttime=UTCDateTime(sel_data[5][sta][0][0]),
+                                                  endtime=UTCDateTime(sel_data[5][sta][0][1]))
 
                 ref_st_aft = client.get_waveforms(network=close_ref_inv[0].code, station=close_ref_inv[0][0].code,
-                                               channel='*Z', location='*',
-                                               starttime=UTCDateTime(sel_data[5][sta][1][0]),
-                                               endtime=UTCDateTime(sel_data[5][sta][1][1]))
+                                                  channel='*Z', location='*',
+                                                  starttime=UTCDateTime(sel_data[5][sta][1][0]),
+                                                  endtime=UTCDateTime(sel_data[5][sta][1][1]))
 
                 uid_counter += 1
                 bef_uid = uid_counter
@@ -2415,25 +2510,17 @@ class Window(QtGui.QMainWindow):
                 print("no data from IRIS or server is unavailable. Make sure proxy settings are set correctly")
                 uid_counter += 1
 
-
-
             # add the data from temporary stations
             for tr in st_bef:
-                xcor_ds.add_waveforms(tr, tag="raw_recording", labels=["region_1", "id" + make_threedig(str(bef_uid)), bef_sta])
+                xcor_ds.add_waveforms(tr, tag="raw_recording",
+                                      labels=["region_1", "id" + make_threedig(str(bef_uid)), bef_sta])
 
             for tr in st_aft:
-                xcor_ds.add_waveforms(tr, tag="raw_recording", labels=["region_2", "id" + make_threedig(str(aft_uid)), aft_sta])
+                xcor_ds.add_waveforms(tr, tag="raw_recording",
+                                      labels=["region_2", "id" + make_threedig(str(aft_uid)), aft_sta])
 
-            #add in station xml
+            # add in station xml
             xcor_ds.add_stationxml(select_inv)
-
-
-
-
-
-
-
-
 
 
 def launch():
@@ -2456,7 +2543,6 @@ def launch():
     ret_val = app.exec_()
     window.__del__()
     os._exit(ret_val)
-
 
 
 if __name__ == "__main__":
