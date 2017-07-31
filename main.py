@@ -1144,7 +1144,7 @@ class Window(QtGui.QMainWindow):
         trace_id = self.selected_row["ASDF_id"]
 
         rc_menu = QtGui.QMenu(self)
-        rc_menu.addAction("Plot Trace", functools.partial(self.trace_selected(trace_id)))
+        rc_menu.addAction("Plot Trace", functools.partial(self.trace_selected, trace_id))
 
         rc_menu.popup(QtGui.QCursor.pos())
 
@@ -1152,6 +1152,7 @@ class Window(QtGui.QMainWindow):
         self.st = self.sta_accessor[trace_id]
 
         print(self.st)
+        self.update_waveform_plot()
 
 
     def build_tables(self):
