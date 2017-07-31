@@ -39,6 +39,7 @@ from DateAxisItem import DateAxisItem
 from seisds import SeisDB
 from query_input_yes_no import query_yes_no
 
+# TODO: Add in ability to multiplot in auxillary data view
 # TODO: add in scroll bar to plot window when there are too many plots (like QC_P_time_compare)
 # TODO: fix Mac OS QMenu bar (currnetly the app needs to be de-focussed and focussed to make the menu bar work)
 # TODO: test functionality with ASDF file with multiple networks
@@ -1074,9 +1075,30 @@ class Window(QtGui.QMainWindow):
 
         self.selected_row = self.cat_df.loc[row_index]
 
+        net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
+        print(net_sta_list)
+
+        # get a list of unique networks and stations
+        net_list = list(set([x.split('.')[0] for x in net_sta_list]))
+        sta_list = [x.split('.')[1] for x in net_sta_list]
+
+        chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
+        tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
+
+        xtract_start = UTCDateTime(self.selected_row['qtime'] - 5*60)
+        xtract_end = UTCDateTime(self.selected_row['qtime'] + 55*60)
+
         self.rc_menu = QtGui.QMenu(self)
-        self.rc_menu.addAction('Open Earthquake with SG2K', functools.partial(
-            self.create_SG2K_initiate, self.selected_row['event_id'], self.selected_row, row_index))
+        self.rc_menu.addAction('Extract Earthquake Into ASDF', functools.partial(
+            self.extract_waveform_frm_ASDF, False,
+            net_list=net_list,
+            sta_list=sta_list,
+            chan_list=chan_list,
+            tags_list=tags_list,
+            ph_st=str(xtract_start).split('.')[0],
+            ph_et=str(xtract_end).split('.')[0]))
+            # event_id=self.selected_row['event_id'],
+            # event_df=self.selected_row))
 
         self.rc_menu.popup(QtGui.QCursor.pos())
 
@@ -1872,6 +1894,10 @@ class Window(QtGui.QMainWindow):
         # Open a new st object
         self.st = Stream()
 
+        # print(kwargs["event_id"])
+        # print(kwargs["event_df"])
+
+
         net_list = kwargs['net_list']
         sta_list = kwargs['sta_list']
         chan_list = kwargs['chan_list']
@@ -1881,6 +1907,7 @@ class Window(QtGui.QMainWindow):
 
         # If override flag then we are calling this
         # method by using prev/next interval buttons
+        # I.e. dont bring up the station selection dialog pop-up - just use get whatever is in the current view
         if override:
 
             interval_tuple = (ph_st.timestamp, ph_et.timestamp)
