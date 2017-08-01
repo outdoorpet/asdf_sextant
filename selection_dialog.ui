@@ -6,25 +6,122 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>254</width>
-    <height>687</height>
+    <width>316</width>
+    <height>913</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>NSC/Tag/Time Selection</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
-   <item>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
     <widget class="QLabel" name="net_lbl">
      <property name="text">
       <string>Networks</string>
      </property>
     </widget>
    </item>
-   <item>
+   <item row="7" column="0">
+    <widget class="QListView" name="TagsListView"/>
+   </item>
+   <item row="9" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <widget class="QSpinBox" name="bef_quake_spinBox">
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="value">
+        <number>15</number>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>minutes before quake</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSpinBox" name="aft_quake_spinBox">
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>200</number>
+       </property>
+       <property name="value">
+        <number>45</number>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>minutes after quake</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item row="6" column="0">
+    <widget class="QLabel" name="tags_lbl">
+     <property name="text">
+      <string>ASDF Tags</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
     <widget class="QListView" name="NetListView"/>
    </item>
-   <item>
+   <item row="10" column="0">
+    <widget class="QCheckBox" name="asdf_output_checkBox">
+     <property name="text">
+      <string>ASDF file output</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QListView" name="StaListView">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="selectionMode">
+      <enum>QAbstractItemView::MultiSelection</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="12" column="0">
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+   <item row="11" column="0">
+    <widget class="QCheckBox" name="refstn_output_checkBox">
+     <property name="text">
+      <string>Get Reference Station Data</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
     <layout class="QHBoxLayout" name="stations_btns_layout">
      <item>
       <widget class="QLabel" name="stn_lbl">
@@ -48,27 +145,7 @@
      </item>
     </layout>
    </item>
-   <item>
-    <widget class="QListView" name="StaListView">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="selectionMode">
-      <enum>QAbstractItemView::MultiSelection</enum>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QLabel" name="chan_lbl">
-     <property name="text">
-      <string>Channels</string>
-     </property>
-    </widget>
-   </item>
-   <item>
+   <item row="5" column="0">
     <widget class="QListView" name="ChanListView">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -87,17 +164,7 @@
      </property>
     </widget>
    </item>
-   <item>
-    <widget class="QLabel" name="tags_lbl">
-     <property name="text">
-      <string>ASDF Tags</string>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QListView" name="TagsListView"/>
-   </item>
-   <item>
+   <item row="8" column="0">
     <layout class="QFormLayout" name="formLayout">
      <property name="fieldGrowthPolicy">
       <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
@@ -144,7 +211,7 @@
         <date>
          <year>1999</year>
          <month>12</month>
-         <day>29</day>
+         <day>27</day>
         </date>
        </property>
        <property name="displayFormat">
@@ -160,13 +227,10 @@
      </item>
     </layout>
    </item>
-   <item>
-    <widget class="QDialogButtonBox" name="buttonBox">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+   <item row="4" column="0">
+    <widget class="QLabel" name="chan_lbl">
+     <property name="text">
+      <string>Channels</string>
      </property>
     </widget>
    </item>

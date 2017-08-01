@@ -483,7 +483,7 @@ class selectionDialog(QtGui.QDialog):
     '''
 
     def __init__(self, parent=None, net_list=None, sta_list=None, chan_list=None, tags_list=None, ph_start=None,
-                 ph_end=None):
+                 ph_end=None, xquake=None):
         QtGui.QDialog.__init__(self, parent)
         self.selui = Ui_SelectDialog()
         self.selui.setupUi(self)
@@ -492,14 +492,36 @@ class selectionDialog(QtGui.QDialog):
         # Set all check box to checked
         # self.selui.check_all.setChecked(True)
 
-        if not ph_start == None and not ph_end == None:
-            self.selui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
-            self.selui.endtime.setDateTime(QtCore.QDateTime.fromString(ph_end, "yyyy-MM-ddThh:mm:ss"))
-            self.no_time = False
-        else:
+        # calling the class where extraction time does not matter
+        if xquake == None:
             self.no_time = True
             self.selui.starttime.setEnabled(False)
             self.selui.endtime.setEnabled(False)
+            self.selui.asdf_output_checkBox.setEnabled(False)
+            self.selui.refstn_output_checkBox.setEnabled(False)
+            self.selui.bef_quake_spinBox.setEnabled(False)
+            self.selui.aft_quake_spinBox.setEnabled(False)
+
+        elif xquake == True:
+            self.no_time = False
+            self.selui.starttime.setEnabled(False)
+            self.selui.endtime.setEnabled(False)
+            if not ph_start == None and not ph_end == None:
+                self.selui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
+                self.selui.endtime.setDateTime(QtCore.QDateTime.fromString(ph_end, "yyyy-MM-ddThh:mm:ss"))
+
+
+        elif xquake == False:
+            self.no_time = False
+            self.selui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
+            self.selui.endtime.setDateTime(QtCore.QDateTime.fromString(ph_end, "yyyy-MM-ddThh:mm:ss"))
+            self.selui.asdf_output_checkBox.setEnabled(False)
+            self.selui.refstn_output_checkBox.setEnabled(False)
+            self.selui.bef_quake_spinBox.setEnabled(False)
+            self.selui.aft_quake_spinBox.setEnabled(False)
+
+
+
 
         self.selui.check_all.clicked.connect(self.selectAllCheckChanged)
 
@@ -510,6 +532,9 @@ class selectionDialog(QtGui.QDialog):
         for net in self.net_list:
             item = QtGui.QStandardItem(net)
             item.setCheckable(True)
+
+            if len(net_list) == 1:
+                item.setCheckState(QtCore.Qt.Checked)
 
             self.net_model.appendRow(item)
 
@@ -522,6 +547,9 @@ class selectionDialog(QtGui.QDialog):
         for sta in self.sta_list:
             item = QtGui.QStandardItem(sta)
             item.setCheckable(True)
+
+            if len(sta_list) == 1:
+                item.setCheckState(QtCore.Qt.Checked)
 
             self.sta_model.appendRow(item)
 
@@ -536,6 +564,8 @@ class selectionDialog(QtGui.QDialog):
         for chan in self.chan_list:
             item = QtGui.QStandardItem(chan)
             item.setCheckable(True)
+            if len(chan_list) == 1:
+                item.setCheckState(QtCore.Qt.Checked)
 
             self.chan_model.appendRow(item)
 
@@ -548,7 +578,8 @@ class selectionDialog(QtGui.QDialog):
         for tags in self.tags_list:
             item = QtGui.QStandardItem(tags)
             item.setCheckable(True)
-
+            if len(tags_list) == 1:
+                item.setCheckState(QtCore.Qt.Checked)
             self.tags_model.appendRow(item)
 
         self.selui.TagsListView.setModel(self.tags_model)
@@ -604,15 +635,18 @@ class selectionDialog(QtGui.QDialog):
             if self.tags_model.item(i).checkState():
                 select_tags.append(str(self.tags_model.item(i).text()))
             i += 1
-
         if self.no_time:
             # Return Selected networks, stations and selected channels, tags
             return (select_networks, select_stations, select_channels, select_tags)
         else:
-            # Return Selected networks, stations and selected channels, tags and start and end times
+            # Return Selected networks, stations and selected channels, tags and start and end times and
+            # before quake and after quake extraction times(or defaults)
             return (select_networks, select_stations, select_channels, select_tags,
                     UTCDateTime(self.selui.starttime.dateTime().toPyDateTime()),
-                    UTCDateTime(self.selui.endtime.dateTime().toPyDateTime()))
+                    UTCDateTime(self.selui.endtime.dateTime().toPyDateTime()),
+                    self.selui.asdf_output_checkBox.isChecked(),
+                    self.selui.refstn_output_checkBox.isChecked(), self.selui.bef_quake_spinBox.value()*60,
+                    self.selui.aft_quake_spinBox.value()*60)
 
 
 class Window(QtGui.QMainWindow):
@@ -1115,18 +1149,19 @@ class Window(QtGui.QMainWindow):
         chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
         tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
 
-        xtract_start = UTCDateTime(self.selected_row['qtime'] - 5 * 60)
-        xtract_end = UTCDateTime(self.selected_row['qtime'] + 55 * 60)
+        xtract_start = UTCDateTime(self.selected_row['qtime'])
+        xtract_end = UTCDateTime(self.selected_row['qtime'])
 
         self.rc_menu = QtGui.QMenu(self)
-        self.rc_menu.addAction('Extract Earthquake Into ASDF', functools.partial(
+        self.rc_menu.addAction('Extract Earthquake', functools.partial(
             self.extract_waveform_frm_ASDF, False,
             net_list=net_list,
             sta_list=sta_list,
             chan_list=chan_list,
             tags_list=tags_list,
             ph_st=str(xtract_start).split('.')[0],
-            ph_et=str(xtract_end).split('.')[0]))
+            ph_et=str(xtract_end).split('.')[0],
+            xquake=True))
         # event_id=self.selected_row['event_id'],
         # event_df=self.selected_row))
 
@@ -1167,11 +1202,14 @@ class Window(QtGui.QMainWindow):
 
         dropped_cat_df[['Q_time_str', 'julday']] = dropped_cat_df.apply(mk_cat_UTC_str, axis=1)
 
-        # tbld table dialog
+        # earthquake table dialog
         self.tbld = EqTableDialog(parent=self, cat_df=dropped_cat_df)
 
         self.tbld.tbldui.EQ_xtract_tableView.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.tbld.tbldui.EQ_xtract_tableView.customContextMenuRequested.connect(self.tbl_view_popup)
+
+        #extract all or selected earthquakes
+        self.tbld.tbldui.xtract_selected_pushButton.released.connect(self.xtract_multi_quakes)
 
         # Lookup Dictionary for table views
         self.tbl_view_dict = {"cat": self.tbld.tbldui.EQ_xtract_tableView}
@@ -1183,6 +1221,42 @@ class Window(QtGui.QMainWindow):
 
         # If headers are clicked then sort
         # self.tbld.cat_event_table_view.horizontalHeader().sectionClicked.connect(self.headerClicked)
+
+    def xtract_multi_quakes(self):
+        """
+        Method to extract multiple earthquakes from the ASDF for multiple stations and can include reference stations
+        Then save all of that data into a new ASDF file
+        """
+        print('hi')
+        focus_widget = self.tbl_view_dict["cat"]
+        # get the selected row numbers
+        row_number_list = [x.row() for x in focus_widget.selectionModel().selectedRows()]
+        row_index_list = [self.table_accessor[focus_widget][1][x] for x in row_number_list]
+
+        self.selected_row_list = [self.cat_df.loc[x] for x in row_index_list]
+
+        net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
+        print(net_sta_list)
+
+        # get a list of unique networks and stations
+        net_list = list(set([x.split('.')[0] for x in net_sta_list]))
+        sta_list = [x.split('.')[1] for x in net_sta_list]
+
+        chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
+        tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
+
+        # open up dialog box to select stations/channels etc to extract earthquakes
+        sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
+                                  tags_list=tags_list, xquake=True)
+        if sel_dlg.exec_():
+            select_net, select_sta, select_chan, select_tags, st, et, file_output, ref_stn_out, \
+            bef_quake_xt, aft_quake_xt = sel_dlg.getSelected()
+
+        for sel_quake in self.selected_row_list:
+            qtime = sel_quake['qtime']
+            print(qtime)
+
+
 
     def on_detrend_and_demean_check_box_stateChanged(self, state):
         self.update_waveform_plot()
@@ -1397,7 +1471,8 @@ class Window(QtGui.QMainWindow):
                                        chan_list=list(chan_set),
                                        tags_list=list(tags_set),
                                        ph_st=new_start_time,
-                                       ph_et=new_end_time)
+                                       ph_et=new_end_time,
+                                       xquake=False)
 
     def on_next_interval_push_button_released(self):
         # Get start and end time of next interval with 10% overlap
@@ -1418,7 +1493,8 @@ class Window(QtGui.QMainWindow):
                                        chan_list=list(chan_set),
                                        tags_list=list(tags_set),
                                        ph_st=new_start_time,
-                                       ph_et=new_end_time)
+                                       ph_et=new_end_time,
+                                       xquake=False)
 
     def on_xcorr_push_button_released(self):
         """
@@ -1600,7 +1676,8 @@ class Window(QtGui.QMainWindow):
                                                                                    tags_list=tags_list,
                                                                                    ph_st=str(net_st).split('.')[0],
                                                                                    ph_et=
-                                                                                   str(net_st + 60 * 60).split('.')[0]))
+                                                                                   str(net_st + 60 * 60).split('.')[0],
+                                                                                   xquake=False))
 
             self.net_item_menu.addAction(select_action)
             self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
@@ -1642,7 +1719,8 @@ class Window(QtGui.QMainWindow):
                                                                                    tags_list=tags_list,
                                                                                    ph_st=str(net_st).split('.')[0],
                                                                                    ph_et=
-                                                                                   str(net_st + 60 * 60).split('.')[0]))
+                                                                                   str(net_st + 60 * 60).split('.')[0],
+                                                                                   xquake=False))
 
             self.net_item_menu.addAction(select_action)
 
@@ -1683,7 +1761,8 @@ class Window(QtGui.QMainWindow):
                                                                                    tags_list=tags_list,
                                                                                    ph_st=str(net_st).split('.')[0],
                                                                                    ph_et=
-                                                                                   str(net_st + 60 * 60).split('.')[0]))
+                                                                                   str(net_st + 60 * 60).split('.')[0],
+                                                                                   xquake=False))
 
             self.net_item_menu.addAction(select_action)
             self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
@@ -2007,6 +2086,7 @@ class Window(QtGui.QMainWindow):
         tags_list = kwargs['tags_list']
         ph_st = kwargs["ph_st"]
         ph_et = kwargs["ph_et"]
+        xquake = kwargs["xquake"]
 
         # If override flag then we are calling this
         # method by using prev/next interval buttons
@@ -2036,11 +2116,16 @@ class Window(QtGui.QMainWindow):
 
             # now call station and channel selection dialog box
             sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
-                                      tags_list=tags_list, ph_start=ph_st, ph_end=ph_et)
+                                      tags_list=tags_list, ph_start=ph_st, ph_end=ph_et, xquake=xquake)
             if sel_dlg.exec_():
-                select_net, select_sta, select_chan, select_tags, st, et = sel_dlg.getSelected()
+                select_net, select_sta, select_chan, select_tags, st, et, file_output, ref_stn_out, \
+                bef_quake_xt, aft_quake_xt = sel_dlg.getSelected()
 
-                interval_tuple = (st.timestamp, et.timestamp)
+                if xquake == True:
+                    # we are lokking at an earthquake, adjust the extraction time based on spin box values
+                    interval_tuple = (st.timestamp - bef_quake_xt, et.timestamp + aft_quake_xt)
+                else:
+                    interval_tuple = (st.timestamp, et.timestamp)
 
                 print('---------------------------------------')
                 print('Finding Data for specified time interval.....')
@@ -2071,6 +2156,9 @@ class Window(QtGui.QMainWindow):
                     # free memory
                     temp_tr = None
 
+                # Now output data into new ASDF if required
+                if file_output:
+                    print("Outputting Data into ASDF file")
         try:
             # TODO: Test if i need to do the final trim...
 
