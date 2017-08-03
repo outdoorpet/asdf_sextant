@@ -29,12 +29,15 @@ import pyasdf
 from pyasdf.exceptions import ASDFValueError
 import functools
 import math
+import inspect
+import importlib
 
 from os.path import join, dirname, basename
 from obspy.core import UTCDateTime, Stream
 from obspy import read_events
 from obspy.clients.fdsn.client import Client
 from obspy.clients.fdsn.header import FDSNException
+# from obspy.signal import filter
 from DateAxisItem import DateAxisItem
 from seisds import SeisDB
 from query_input_yes_no import query_yes_no
@@ -61,12 +64,14 @@ select_stacomp_dialog_ui = "selection_dialog.ui"
 extract_time_dialog_ui = "extract_time_dialog.ui"
 eq_extraction_dialog_ui = "eq_extraction_dialog.ui"
 data_avail_dialog_ui = "data_avail_dialog.ui"
+filter_dialog = "filter_dialog.ui"
 
 Ui_MainWindow, QtBaseClass = uic.loadUiType(asdf_sextant_window_ui)
 Ui_SelectDialog, QtBaseClass = uic.loadUiType(select_stacomp_dialog_ui)
 Ui_ExtractTimeDialog, QtBaseClass = uic.loadUiType(extract_time_dialog_ui)
 Ui_EqExtractionDialog, QtBaseClass = uic.loadUiType(eq_extraction_dialog_ui)
 Ui_DataAvailDialog, QtBaseClass = uic.loadUiType(data_avail_dialog_ui)
+Ui_FilterDialog, QtBaseClass = uic.loadUiType(filter_dialog)
 
 # Enums only exists in Python 3 and we don't really need them here...
 STATION_VIEW_ITEM_TYPES = {
@@ -648,6 +653,62 @@ class selectionDialog(QtGui.QDialog):
                     self.selui.refstn_output_checkBox.isChecked(), self.selui.bef_quake_spinBox.value()*60,
                     self.selui.aft_quake_spinBox.value()*60)
 
+class MyFilterTableModel(QtCore.QAbstractTableModel):
+    pass
+
+class FilterDialog(QtGui.QDialog):
+    """
+    Class for dialog to select filter type and filter arguments to be applied to data in view
+    """
+
+    def __init__(self, parent=None):
+        QtGui.QDialog.__init__(self, parent)
+        self.filui = Ui_FilterDialog()
+        self.filui.setupUi(self)
+
+        # populate filter types
+        filter_type_list = ["bandpass", "bandstop", "envelope", "highpass", "integer_decimation",
+                        "lowpass", "lowpass_cheby_2", "lowpass_fir", "remez_fir"]
+
+        self.filter_type_model = QtGui.QStandardItemModel(self.filui.filter_type_listView)
+
+        for filter_type in filter_type_list:
+            item = QtGui.QStandardItem(filter_type)
+            item.setCheckable(False)
+            self.filter_type_model.appendRow(item)
+
+        self.filui.filter_type_listView.setModel(self.filter_type_model)
+
+
+    @QtCore.pyqtSlot(QtCore.QModelIndex)
+    def on_filter_type_listView_clicked(self, index):
+        # get the selected filter
+        filter_sel = index.data().toString()
+        print(filter_sel)
+
+        # import the filter function from obspy
+        fil_func = getattr(importlib.import_module("obspy.signal.filter"), str(filter_sel))
+
+        # get the arguments of the selected filter with the data argument removed
+        args_list = inspect.getargspec(fil_func).args
+        defaults_list = [None for x in range(len(args_list))]
+
+        # if the filter has defaults then populate them in the list
+        if inspect.getargspec(fil_func).defaults is not None:
+            for i, def_par in enumerate(inspect.getargspec(fil_func).defaults):
+                index = i - len(inspect.getargspec(fil_func).defaults)
+                defaults_list[index] = def_par
+
+        # remove the data argument
+        args_list= args_list[1:]
+        defaults_list = defaults_list[1:]
+        print(dict(zip(args_list, defaults_list)))
+
+
+
+    def get_arguments(self):
+        pass
+
 
 class Window(QtGui.QMainWindow):
     def __init__(self):
@@ -699,8 +760,9 @@ class Window(QtGui.QMainWindow):
         self.ui.normalize_check_box.setEnabled(False)
 
         # self.ui.actionXCOR.triggered.connect(self.get_xcor_data)
-        self.ui.actionFilter.triggered.connect(self.bpfilter)
-        self.bpfilter_selected = False
+        # self.ui.actionFilter.triggered.connect(self.bpfilter)
+        # self.bpfilter_selected = False
+        self.ui.bp_filter_settings_toolButton.released.connect(self.bpfilter_settings)
 
         # Add right clickability to station view
         self.ui.station_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -1227,7 +1289,6 @@ class Window(QtGui.QMainWindow):
         Method to extract multiple earthquakes from the ASDF for multiple stations and can include reference stations
         Then save all of that data into a new ASDF file
         """
-        print('hi')
         focus_widget = self.tbl_view_dict["cat"]
         # get the selected row numbers
         row_number_list = [x.row() for x in focus_widget.selectionModel().selectedRows()]
@@ -1267,9 +1328,10 @@ class Window(QtGui.QMainWindow):
     def on_group_by_network_check_box_stateChanged(self, state):
         self.build_station_view_list()
 
-    def bpfilter(self):
-        self.bpfilter_selected = True
-        self.update_waveform_plot()
+    def bpfilter_settings(self):
+        fil_dlg = FilterDialog(parent=self)
+        if fil_dlg.exec_():
+            print('hi')
 
     def on_graph_itemClicked(self, event):
         if event.button() == 4:
@@ -1368,7 +1430,8 @@ class Window(QtGui.QMainWindow):
         filter_settings["detrend_and_demean"] = \
             self.ui.detrend_and_demean_check_box.isChecked()
         filter_settings["normalize"] = self.ui.normalize_check_box.isChecked()
-        filter_settings["bpfilter"] = self.bpfilter_selected
+        # filter_settings["bpfilter"] = self.bpfilter_selected
+        filter_settings["bpfilter"] = self.ui.bp_filter_check_box.isChecked()
 
         temp_st = self.st.copy()
 
