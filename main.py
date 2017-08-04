@@ -702,8 +702,8 @@ class FilterDialog(QtGui.QDialog):
         self.filui.setupUi(self)
 
         # populate filter types
-        filter_type_list = ["bandpass", "bandstop", "envelope", "highpass",
-                        "lowpass", "lowpass_cheby_2", "lowpass_fir", "remez_fir"]
+        filter_type_list = ["bandpass", "bandstop", "highpass",
+                        "lowpass", "lowpass_cheby_2"]
 
         self.filter_type_model = QtGui.QStandardItemModel(self.filui.filter_type_listView)
 
