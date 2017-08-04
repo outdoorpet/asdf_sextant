@@ -32,8 +32,10 @@ import math
 import inspect
 import importlib
 
+from distutils.util import strtobool
+
 from os.path import join, dirname, basename
-from obspy.core import UTCDateTime, Stream
+from obspy.core import UTCDateTime, Stream, Trace
 from obspy import read_events
 from obspy.clients.fdsn.client import Client
 from obspy.clients.fdsn.header import FDSNException
@@ -654,7 +656,40 @@ class selectionDialog(QtGui.QDialog):
                     self.selui.aft_quake_spinBox.value()*60)
 
 class MyFilterTableModel(QtCore.QAbstractTableModel):
-    pass
+    def __init__(self, datain, parent=None):
+        QtCore.QAbstractTableModel.__init__(self, parent)
+        self.arraydata = datain
+
+    def rowCount(self, parent):
+        return len(self.arraydata)
+
+    def columnCount(self, parent):
+        return len(self.arraydata[0])
+
+    def data(self, index, role):
+        if not index.isValid():
+            return None
+        elif role != QtCore.Qt.DisplayRole:
+            return None
+
+        return (self.arraydata[index.row()][index.column()])
+
+    def setData(self, index, value, role):
+        self.arraydata[index.row()][index.column()] = value
+        return True
+
+
+    def flags(self, index):
+        if not index.isValid():
+            return None
+        elif index.column() == 1:
+            return QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+        else:
+            return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+
+
+
+
 
 class FilterDialog(QtGui.QDialog):
     """
@@ -667,7 +702,7 @@ class FilterDialog(QtGui.QDialog):
         self.filui.setupUi(self)
 
         # populate filter types
-        filter_type_list = ["bandpass", "bandstop", "envelope", "highpass", "integer_decimation",
+        filter_type_list = ["bandpass", "bandstop", "envelope", "highpass",
                         "lowpass", "lowpass_cheby_2", "lowpass_fir", "remez_fir"]
 
         self.filter_type_model = QtGui.QStandardItemModel(self.filui.filter_type_listView)
@@ -683,11 +718,10 @@ class FilterDialog(QtGui.QDialog):
     @QtCore.pyqtSlot(QtCore.QModelIndex)
     def on_filter_type_listView_clicked(self, index):
         # get the selected filter
-        filter_sel = index.data().toString()
-        print(filter_sel)
+        self.filter_sel = index.data().toString()
 
         # import the filter function from obspy
-        fil_func = getattr(importlib.import_module("obspy.signal.filter"), str(filter_sel))
+        fil_func = getattr(importlib.import_module("obspy.signal.filter"), str(self.filter_sel))
 
         # get the arguments of the selected filter with the data argument removed
         args_list = inspect.getargspec(fil_func).args
@@ -699,15 +733,60 @@ class FilterDialog(QtGui.QDialog):
                 index = i - len(inspect.getargspec(fil_func).defaults)
                 defaults_list[index] = def_par
 
-        # remove the data argument
-        args_list= args_list[1:]
-        defaults_list = defaults_list[1:]
-        print(dict(zip(args_list, defaults_list)))
+        # remove the data argument and the df argument
+        new_args_list = []
+        new_def_list = []
+
+        for i, arg in enumerate(args_list):
+            if not arg in ["data", "df"]:
+                new_args_list.append(args_list[i])
+                new_def_list.append(defaults_list[i])
+
+
+
+
+
+        self.args_array = np.array([new_args_list, new_def_list]).transpose()
+
+        if not self.args_array.shape[0] == 0:
+
+            self.build_args_table()
+
+    def build_args_table(self):
+        self.tablemodel = MyFilterTableModel(self.args_array, self)
+        self.filui.filter_args_tableView.setModel(self.tablemodel)
 
 
 
     def get_arguments(self):
-        pass
+        ret_args = []
+        params = []
+
+
+
+        if not self.args_array.shape[0] == 0:
+            # get the argument values from the table
+            for row in range(self.args_array.shape[0]):
+                index = self.tablemodel.index(row, 1)
+                params.append(str(self.tablemodel.data(self.tablemodel.index(row, 0), QtCore.Qt.DisplayRole)))
+                try:
+                    iter_arg = str(self.tablemodel.data(index, QtCore.Qt.DisplayRole).toString())
+                except AttributeError:
+                    try:
+                        iter_arg = str(self.tablemodel.data(index, QtCore.Qt.DisplayRole).toFloat())
+                    except AttributeError:
+                        iter_arg = str(self.tablemodel.data(index, QtCore.Qt.DisplayRole))
+
+
+                if iter_arg in ["false", "true", "True", "False"]:
+                    iter_arg = strtobool(iter_arg)
+                else:
+                    iter_arg = float(iter_arg)
+
+                ret_args.append(iter_arg)
+
+        return [str(self.filter_sel), dict(zip(params, ret_args))]
+
 
 
 class Window(QtGui.QMainWindow):
@@ -758,6 +837,8 @@ class Window(QtGui.QMainWindow):
         self.ui.references_push_button.setEnabled(False)
         self.ui.detrend_and_demean_check_box.setEnabled(False)
         self.ui.normalize_check_box.setEnabled(False)
+        self.ui.bp_filter_check_box.setEnabled(False)
+        self.ui.bp_filter_settings_toolButton.setEnabled(False)
 
         # self.ui.actionXCOR.triggered.connect(self.get_xcor_data)
         # self.ui.actionFilter.triggered.connect(self.bpfilter)
@@ -1328,10 +1409,21 @@ class Window(QtGui.QMainWindow):
     def on_group_by_network_check_box_stateChanged(self, state):
         self.build_station_view_list()
 
+    def on_bp_filter_check_box_stateChanged(self, state):
+        self.update_waveform_plot()
+
     def bpfilter_settings(self):
         fil_dlg = FilterDialog(parent=self)
         if fil_dlg.exec_():
-            print('hi')
+            self.filter_args = fil_dlg.get_arguments()
+            print(self.filter_args)
+
+            if self.ui.bp_filter_check_box.isChecked():
+                self.update_waveform_plot()
+
+
+
+
 
     def on_graph_itemClicked(self, event):
         if event.button() == 4:
@@ -1424,6 +1516,8 @@ class Window(QtGui.QMainWindow):
         self.ui.references_push_button.setEnabled(True)
         self.ui.normalize_check_box.setEnabled(True)
         self.ui.detrend_and_demean_check_box.setEnabled(True)
+        self.ui.bp_filter_check_box.setEnabled(True)
+        self.ui.bp_filter_settings_toolButton.setEnabled(True)
 
         # Get the filter settings.
         filter_settings = {}
@@ -1435,6 +1529,7 @@ class Window(QtGui.QMainWindow):
 
         temp_st = self.st.copy()
 
+
         if filter_settings["detrend_and_demean"]:
             temp_st.detrend("linear")
             temp_st.detrend("demean")
@@ -1443,7 +1538,17 @@ class Window(QtGui.QMainWindow):
             temp_st.normalize()
 
         if filter_settings["bpfilter"]:
-            temp_st.filter("bandpass", freqmin=0.01, freqmax=10)
+            if hasattr(self, "filter_args"):
+                print(self.filter_args)
+
+                # # remove the df from the args dict
+                # self.filter_args[1].pop("df", 0)
+
+                print(self.filter_args)
+
+                temp_st.filter(self.filter_args[0], **self.filter_args[1])
+            else:
+                temp_st.filter("bandpass", freqmin=0.01, freqmax=10)
 
         self.ui.graph.clear()
         self.ui.graph.setMinimumPlotHeight(200)

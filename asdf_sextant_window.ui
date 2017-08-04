@@ -149,6 +149,20 @@
              </widget>
             </item>
             <item>
+             <widget class="QCheckBox" name="bp_filter_check_box">
+              <property name="text">
+               <string>BP Filter</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="bp_filter_settings_toolButton">
+              <property name="text">
+               <string>Filter Settings</string>
+              </property>
+             </widget>
+            </item>
+            <item>
              <spacer name="horizontalSpacer_2">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
