@@ -156,6 +156,7 @@ class PandasModel(QtCore.QAbstractTableModel):
                 return p_int
         return None
 
+
 class TraceTableDialog(QtGui.QDialog):
     """
       Class to create a separate child window to display the traces for a sttaion on a table
@@ -246,11 +247,15 @@ class DataAvailPlot(QtGui.QDialog):
     Dialog for Data Availablity plot
     '''
 
-    def __init__(self, parent=None, net_list=None, sta_list=None, chan_list=None, tags_list=None, rec_int_dict=None):
+    def __init__(self, parent=None, net_list=None, sta_list=None, chan_list=None, tags_list=None,
+                 rec_int_dict=None, cat_avail=False, cat_df=None):
         QtGui.QDialog.__init__(self, parent)
         self.davailui = Ui_DataAvailDialog()
         self.davailui.setupUi(self)
         self.davailui.go_push_button.setEnabled(False)
+
+        self.cat_df = cat_df
+        self.cat_avail = cat_avail
 
         # self.data_avail_graph_view = pg.GraphicsLayoutWidget()
 
@@ -363,9 +368,14 @@ class DataAvailPlot(QtGui.QDialog):
         self.plot.addItem(self.lri)
 
     def dispMousePos(self, pos):
+
         # Display current mouse coords if over the scatter plot area as a tooltip
         try:
             x_coord = UTCDateTime(self.plot.vb.mapSceneToView(pos).toPoint().x()).ctime()
+            print(self.plot.vb.mapSceneToView(pos).toPoint().x())
+            if self.plot.vb.mapSceneToView(pos).toPoint().x() in self.cat_df["qtime"].tolist():
+                print("QUAKE")
+                print(self.plot.vb.mapSceneToView(pos).toPoint().x())
             self.time_tool = self.plot.setToolTip(x_coord)
         except:
             pass
@@ -441,6 +451,26 @@ class DataAvailPlot(QtGui.QDialog):
         err.setZValue(10)
 
         self.plot.addItem(err)
+
+        self.plot_earthquakes()
+
+    def plot_earthquakes(self):
+        # cant compare if data frame is none or not
+        if self.cat_avail:
+            # get the earthquake timestamps
+            qtimes = self.cat_df["qtime"].tolist()
+            ids = self.cat_df["event_id"].tolist()
+            print(qtimes)
+
+            for i, qtime in enumerate(qtimes):
+                qline = pg.InfiniteLine(pos=qtime)
+                self.plot.addItem(qline)
+
+    #             qline.sigMouseClicked.connect(self.quake_clicked)
+    #
+    #
+    # def quake_clicked(self, pos):
+    #     print('hi')
 
     def get_roi_data(self):
         print(self.xtract_method)
@@ -655,6 +685,7 @@ class selectionDialog(QtGui.QDialog):
                     self.selui.refstn_output_checkBox.isChecked(), self.selui.bef_quake_spinBox.value()*60,
                     self.selui.aft_quake_spinBox.value()*60)
 
+
 class MyFilterTableModel(QtCore.QAbstractTableModel):
     def __init__(self, datain, parent=None):
         QtCore.QAbstractTableModel.__init__(self, parent)
@@ -686,9 +717,6 @@ class MyFilterTableModel(QtCore.QAbstractTableModel):
             return QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
         else:
             return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
-
-
-
 
 
 class FilterDialog(QtGui.QDialog):
@@ -788,7 +816,6 @@ class FilterDialog(QtGui.QDialog):
         return [str(self.filter_sel), dict(zip(params, ret_args))]
 
 
-
 class Window(QtGui.QMainWindow):
     def __init__(self):
         QtGui.QMainWindow.__init__(self)
@@ -837,13 +864,13 @@ class Window(QtGui.QMainWindow):
         self.ui.references_push_button.setEnabled(False)
         self.ui.detrend_and_demean_check_box.setEnabled(False)
         self.ui.normalize_check_box.setEnabled(False)
-        self.ui.bp_filter_check_box.setEnabled(False)
-        self.ui.bp_filter_settings_toolButton.setEnabled(False)
+        self.ui.waveform_filter_check_box.setEnabled(False)
+        # self.ui.waveform_filter_settings_toolButton.setEnabled(False)
 
         # self.ui.actionXCOR.triggered.connect(self.get_xcor_data)
         # self.ui.actionFilter.triggered.connect(self.bpfilter)
         # self.bpfilter_selected = False
-        self.ui.bp_filter_settings_toolButton.released.connect(self.bpfilter_settings)
+        self.ui.waveform_filter_settings_toolButton.released.connect(self.waveform_filter_settings)
 
         # Add right clickability to station view
         self.ui.station_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -1310,7 +1337,6 @@ class Window(QtGui.QMainWindow):
 
         self.rc_menu.popup(QtGui.QCursor.pos())
 
-
     def trace_tbl_view_popup(self):
         focus_widget = QtGui.QApplication.focusWidget()
 
@@ -1331,7 +1357,6 @@ class Window(QtGui.QMainWindow):
 
         print(self.st)
         self.update_waveform_plot()
-
 
     def build_tables(self):
 
@@ -1398,8 +1423,6 @@ class Window(QtGui.QMainWindow):
             qtime = sel_quake['qtime']
             print(qtime)
 
-
-
     def on_detrend_and_demean_check_box_stateChanged(self, state):
         self.update_waveform_plot()
 
@@ -1409,21 +1432,21 @@ class Window(QtGui.QMainWindow):
     def on_group_by_network_check_box_stateChanged(self, state):
         self.build_station_view_list()
 
-    def on_bp_filter_check_box_stateChanged(self, state):
+    def on_waveform_filter_check_box_stateChanged(self, state):
         self.update_waveform_plot()
 
-    def bpfilter_settings(self):
+    def waveform_filter_settings(self):
+        # open the filter dialog window to set filter settings
         fil_dlg = FilterDialog(parent=self)
         if fil_dlg.exec_():
-            self.filter_args = fil_dlg.get_arguments()
-            print(self.filter_args)
+            self.filter_settings = fil_dlg.get_arguments()
 
-            if self.ui.bp_filter_check_box.isChecked():
+            print(self.filter_settings)
+
+
+            # if the filter box is checked then once the filter settings are set update the waveform plot with filter applied
+            if self.ui.waveform_filter_check_box.isChecked():
                 self.update_waveform_plot()
-
-
-
-
 
     def on_graph_itemClicked(self, event):
         if event.button() == 4:
@@ -1516,16 +1539,15 @@ class Window(QtGui.QMainWindow):
         self.ui.references_push_button.setEnabled(True)
         self.ui.normalize_check_box.setEnabled(True)
         self.ui.detrend_and_demean_check_box.setEnabled(True)
-        self.ui.bp_filter_check_box.setEnabled(True)
-        self.ui.bp_filter_settings_toolButton.setEnabled(True)
+        self.ui.waveform_filter_check_box.setEnabled(True)
+        self.ui.waveform_filter_settings_toolButton.setEnabled(True)
 
         # Get the filter settings.
         filter_settings = {}
         filter_settings["detrend_and_demean"] = \
             self.ui.detrend_and_demean_check_box.isChecked()
         filter_settings["normalize"] = self.ui.normalize_check_box.isChecked()
-        # filter_settings["bpfilter"] = self.bpfilter_selected
-        filter_settings["bpfilter"] = self.ui.bp_filter_check_box.isChecked()
+        filter_settings["wavefilter"] = self.ui.waveform_filter_check_box.isChecked()
 
         temp_st = self.st.copy()
 
@@ -1537,16 +1559,16 @@ class Window(QtGui.QMainWindow):
         if filter_settings["normalize"]:
             temp_st.normalize()
 
-        if filter_settings["bpfilter"]:
-            if hasattr(self, "filter_args"):
-                print(self.filter_args)
+        if filter_settings["wavefilter"]:
+            if hasattr(self, "filter_settings"):
+                print(self.filter_settings)
 
                 # # remove the df from the args dict
                 # self.filter_args[1].pop("df", 0)
 
-                print(self.filter_args)
+                print(self.filter_settings)
 
-                temp_st.filter(self.filter_args[0], **self.filter_args[1])
+                temp_st.filter(self.filter_settings[0], **self.filter_settings[1])
             else:
                 temp_st.filter("bandpass", freqmin=0.01, freqmax=10)
 
@@ -2239,7 +2261,6 @@ class Window(QtGui.QMainWindow):
         self.trace_tbld.trace_table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.trace_tbld.trace_table_view.customContextMenuRequested.connect(self.trace_tbl_view_popup)
 
-
     def extract_waveform_frm_ASDF(self, override, **kwargs):
         # Open a new st object
         self.st = Stream()
@@ -2559,7 +2580,15 @@ class Window(QtGui.QMainWindow):
 
         # print("running data avail")
 
-        self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+
+        # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
+        if hasattr(self, "cat_df"):
+
+            self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+                                             chan_list=[chan], tags_list=tags_list,
+                                             rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
+        else:
+            self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
                                              chan_list=[chan], tags_list=tags_list,
                                              rec_int_dict=self.recording_intervals)
 
@@ -2575,7 +2604,8 @@ class Window(QtGui.QMainWindow):
                                            chan_list=ret[3],
                                            tags_list=ret[4],
                                            ph_st=UTCDateTime(ret[5][0]),
-                                           ph_et=UTCDateTime(ret[5][1]))
+                                           ph_et=UTCDateTime(ret[5][1]),
+                                           xquake=False)
 
         elif ret[0] == "xcor_region":
             self.get_xcor_data(ret)

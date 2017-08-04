@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1325</width>
-    <height>818</height>
+    <width>1440</width>
+    <height>900</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -74,8 +74,8 @@
            </widget>
           </item>
           <item>
-           <widget class="QWebView" name="web_view">
-            <property name="url">
+           <widget class="QWebView" name="web_view" native="true">
+            <property name="url" stdset="0">
              <url>
               <string>about:blank</string>
              </url>
@@ -149,14 +149,14 @@
              </widget>
             </item>
             <item>
-             <widget class="QCheckBox" name="bp_filter_check_box">
+             <widget class="QCheckBox" name="waveform_filter_check_box">
               <property name="text">
-               <string>BP Filter</string>
+               <string>Waveform Filter</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QToolButton" name="bp_filter_settings_toolButton">
+             <widget class="QToolButton" name="waveform_filter_settings_toolButton">
               <property name="text">
                <string>Filter Settings</string>
               </property>
@@ -379,8 +379,8 @@
         <item>
          <layout class="QVBoxLayout" name="verticalLayout_5" stretch="1,0">
           <item>
-           <widget class="QWebView" name="events_web_view">
-            <property name="url">
+           <widget class="QWebView" name="events_web_view" native="true">
+            <property name="url" stdset="0">
              <url>
               <string>about:blank</string>
              </url>
@@ -414,8 +414,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1325</width>
-     <height>26</height>
+     <width>1440</width>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
