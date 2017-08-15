@@ -161,6 +161,7 @@ class TraceTableDialog(QtGui.QDialog):
     """
       Class to create a separate child window to display the traces for a sttaion on a table
       """
+    #TODO: add in sortable header
     def __init__(self, parent=None, trace_df=None):
         super(TraceTableDialog, self).__init__(parent)
 
@@ -372,10 +373,10 @@ class DataAvailPlot(QtGui.QDialog):
         # Display current mouse coords if over the scatter plot area as a tooltip
         try:
             x_coord = UTCDateTime(self.plot.vb.mapSceneToView(pos).toPoint().x()).ctime()
-            print(self.plot.vb.mapSceneToView(pos).toPoint().x())
-            if self.plot.vb.mapSceneToView(pos).toPoint().x() in self.cat_df["qtime"].tolist():
-                print("QUAKE")
-                print(self.plot.vb.mapSceneToView(pos).toPoint().x())
+            # print(self.plot.vb.mapSceneToView(pos).toPoint().x())
+            # if self.plot.vb.mapSceneToView(pos).toPoint().x() in self.cat_df["qtime"].tolist():
+                # print("QUAKE")
+                # print(self.plot.vb.mapSceneToView(pos).toPoint().x())
             self.time_tool = self.plot.setToolTip(x_coord)
         except:
             pass
