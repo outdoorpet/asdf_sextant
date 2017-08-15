@@ -1889,8 +1889,10 @@ class Window(QtGui.QMainWindow):
             # get inventory for station
             inv = sta.StationXML
 
-            net_st = inv[0].start_date
-            net_et = inv[0].end_date
+            net_st = inv[0][0].start_date
+            net_et = inv[0][0].end_date
+
+            print(net_st)
 
             chan_list = [x.split('.')[2] for x in inv[0][0].get_contents()["channels"]]
 
@@ -1940,8 +1942,16 @@ class Window(QtGui.QMainWindow):
             # get inventory for station
             inv = sta.StationXML
 
-            net_st = inv[0].start_date
-            net_et = inv[0].end_date
+            print(inv[0][0][0])
+
+            net_st = inv[0][0][0].start_date
+            net_et = inv[0][0][0].end_date
+
+            if not net_st or not net_et:
+                # there is no time information for the channel
+                # get the start and end time for the station
+                net_st = inv[0][0].start_date
+                net_et = inv[0][0].end_date
 
             self.net_item_menu = QtGui.QMenu(self)
             select_action = QtGui.QAction('Extract Waveforms for Channel', self)
