@@ -1420,9 +1420,39 @@ class Window(QtGui.QMainWindow):
             select_net, select_sta, select_chan, select_tags, st, et, file_output, ref_stn_out, \
             bef_quake_xt, aft_quake_xt = sel_dlg.getSelected()
 
-        for sel_quake in self.selected_row_list:
-            qtime = sel_quake['qtime']
-            print(qtime)
+            self.output_eq_asdf()
+
+            for _i, sel_quake in enumerate(self.selected_row_list):
+                qtime = sel_quake['qtime']
+                print(sel_quake)
+                self.cat_row_index_list[_i]
+                print(self.cat[self.cat_row_index_list[_i]])
+
+
+
+                # we are looking at an earthquake, adjust the extraction time based on spin box values
+                interval_tuple = (qtime - bef_quake_xt, qtime + aft_quake_xt)
+                # do a query for data
+                query = self.db.queryByTime(select_net, select_sta, select_chan, select_tags, interval_tuple[0],
+                                            interval_tuple[1])
+                self.st = self.query_to_stream(query, interval_tuple)
+
+                print(self.st)
+
+                for tr in self.st:
+                    # add the waveforms referenced to the earthquake
+                    self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
+                                                   event_id=self.cat[self.cat_row_index_list[_i]])
+
+                    self.out_eq_asdf.add_stationxml(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
+
+                # add the earthquake
+                self.out_eq_asdf.add_quakeml(self.cat[self.cat_row_index_list[_i]])
+
+            # close the dataset
+            del self.out_eq_asdf
+
+
 
     def on_detrend_and_demean_check_box_stateChanged(self, state):
         self.update_waveform_plot()
@@ -2272,12 +2302,58 @@ class Window(QtGui.QMainWindow):
         self.trace_tbld.trace_table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.trace_tbld.trace_table_view.customContextMenuRequested.connect(self.trace_tbl_view_popup)
 
+    def query_to_stream(self, query, interval_tuple):
+        """
+        method to use output from seisds query to return waveform streams
+        """
 
+        # Open a new st object
+        st = Stream()
 
+        for matched_info in query.values():
+            # read the data from the ASDF into stream
+            temp_tr = self.ds.waveforms[matched_info["new_network"] + '.' + matched_info["new_station"]][
+                matched_info["ASDF_tag"]][0]
+
+            # trim trace to start and endtime
+            temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
+
+            # append trace to stream
+            st += temp_tr
+
+            # free memory
+            temp_tr = None
+
+        try:
+            # TODO: Test if i need to do the final trim...
+
+            if st.__nonzero__():
+                # Attempt to merge all traces with matching ID'S in place
+                print('')
+                print('Merging Traces from %s Stations....' % len(st))
+                # filling no data with 0
+                st.merge(fill_value=0)
+                print('\nTrimming Traces to specified time interval....')
+                st.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
+                return st
+            else:
+                msg = QtGui.QMessageBox()
+                msg.setIcon(QtGui.QMessageBox.Critical)
+                msg.setText("No Data for Requested Time Interval")
+                msg.setDetailedText("There are no waveforms to display for selected time interval:"
+                                    "\nStart Time = " + str(UTCDateTime(interval_tuple[0], precision=0)) +
+                                    "\nEnd Time =   " + str(UTCDateTime(interval_tuple[1], precision=0)))
+                msg.setWindowTitle("Extract Time Error")
+                msg.setStandardButtons(QtGui.QMessageBox.Ok)
+                msg.exec_()
+                return None
+        except UnboundLocalError:
+            # the station selection dialog box was cancelled
+            return None
 
     def extract_waveform_frm_ASDF(self, override, **kwargs):
-        # Open a new st object
-        self.st = Stream()
+        # # Open a new st object
+        # self.st = Stream()
 
         # print(kwargs["event_id"])
         # print(kwargs["event_df"])
@@ -2299,19 +2375,8 @@ class Window(QtGui.QMainWindow):
             interval_tuple = (ph_st.timestamp, ph_et.timestamp)
             query = self.db.queryByTime(net_list, sta_list, chan_list, tags_list, interval_tuple[0], interval_tuple[1])
 
-            for matched_info in query.values():
-                # read the data from the ASDF into stream
-                temp_tr = self.ds.waveforms[matched_info["new_network"] + '.' + matched_info["new_station"]][
-                    matched_info["ASDF_tag"]][0]
+            self.st = self.query_to_stream(query, interval_tuple)
 
-                # trim trace to start and endtime
-                temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
-
-                # append trace to stream
-                self.st += temp_tr
-
-                # free memory
-                temp_tr = None
 
         # if there is no override flag then we want to extract data from a desired net/sta/chan and time interval
         # i.e. show the selection dialog
@@ -2343,54 +2408,41 @@ class Window(QtGui.QMainWindow):
                 query = self.db.queryByTime(select_net, select_sta, select_chan, select_tags, interval_tuple[0],
                                             interval_tuple[1])
 
-                for matched_info in query.values():
-                    # print(matched_info["ASDF_tag"])
+                self.st = self.query_to_stream(query, interval_tuple)
 
-                    # read the data from the ASDF into stream
-                    temp_tr = self.ds.waveforms[matched_info["new_network"] + '.' + matched_info["new_station"]][
-                        matched_info["ASDF_tag"]][0]
 
-                    # trim trace to start and endtime
-                    temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
-
-                    # append trace to stream
-                    self.st += temp_tr
-
-                    # free memory
-                    temp_tr = None
-
-                # Now output data into new ASDF if required
-                # if file_output:
-                #     print("Outputting Data into ASDF file")
-        try:
-            # TODO: Test if i need to do the final trim...
-
-            if self.st.__nonzero__():
-                # Attempt to merge all traces with matching ID'S in place
-                print('')
-                print('Merging Traces from %s Stations....' % len(self.st))
-                # filling no data with 0
-                self.st.merge(fill_value=0)
-                print('\nTrimming Traces to specified time interval....')
-                self.st.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
-                self.update_waveform_plot()
-                # Now output data into new ASDF if required
-                if file_output:
-                    self.output_eq_asdf()
             else:
-                msg = QtGui.QMessageBox()
-                msg.setIcon(QtGui.QMessageBox.Critical)
-                msg.setText("No Data for Requested Time Interval")
-                msg.setDetailedText("There are no waveforms to display for selected time interval:"
-                                    "\nStart Time = " + str(UTCDateTime(interval_tuple[0], precision=0)) +
-                                    "\nEnd Time =   " + str(UTCDateTime(interval_tuple[1], precision=0)))
-                msg.setWindowTitle("Extract Time Error")
-                msg.setStandardButtons(QtGui.QMessageBox.Ok)
-                msg.exec_()
+                return
 
-        except UnboundLocalError:
-            # the station selection dialog box was cancelled
-            pass
+
+
+
+        if not self.st == None:
+            self.update_waveform_plot()
+            # Now output data into new ASDF if required
+            if file_output:
+                self.output_eq_asdf()
+
+                for tr in self.st:
+                    # add the waveforms referenced to the earthquake
+                    self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
+                                                   event_id=self.cat[self.cat_row_index])
+                    print(tr.stats.network + "." + tr.stats.station)
+
+                    print(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
+                    self.out_eq_asdf.add_stationxml(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
+
+                    # add the earthquake
+                self.out_eq_asdf.add_quakeml(self.cat[self.cat_row_index])
+
+                print(self.st)
+                print(self.selected_row)
+
+                # print(self.cat)
+                print(self.cat[self.cat_row_index])
+
+                # close the dataset
+                del self.out_eq_asdf
 
     # TODO: re-write earthquake extraction
     # def analyse_earthquake(self, event_obj):
@@ -2468,51 +2520,16 @@ class Window(QtGui.QMainWindow):
             self.out_eq_filname = self.out_eq_filname + ".h5"
 
         # remove the file if it already exists
-        if os._exists(self.out_eq_filname):
+        if os.path.exists(self.out_eq_filname):
             os.remove(self.out_eq_filname)
 
 
         print(self.out_eq_filname)
 
-        # make a number into a 4 digit string
-        def mk_fourdig(a):
-            if len(str(a))==1:
-                return "000" + str(a)
-            elif len(str(a))==2:
-                return "00" + str(a)
-            elif len(str(a))==3:
-                return "0" + str(a)
-            else:
-                return a
-
 
         # create the asdf file
         self.out_eq_asdf = pyasdf.ASDFDataSet(self.out_eq_filname)
 
-        for _i, tr in enumerate(self.st):
-
-
-            # add the waveforms referenced to the earthquake
-            self.out_eq_asdf.add_waveforms(tr,tag="earthquake",
-                                           event_id=self.cat[self.cat_row_index],
-                                           labels=["pickid"+mk_fourdig(_i)])
-            print(tr.stats.network + "." + tr.stats.station)
-
-            print(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
-            self.out_eq_asdf.add_stationxml(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
-
-        # add the earthquake
-        self.out_eq_asdf.add_quakeml(self.cat[self.cat_row_index])
-
-        print(self.st)
-        print(self.selected_row)
-
-        # print(self.cat)
-        print(self.cat[self.cat_row_index])
-
-
-        # close the dataset
-        del self.out_eq_asdf
 
 
 
