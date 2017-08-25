@@ -1267,13 +1267,13 @@ class Window(QtGui.QMainWindow):
         if not self.cat_filename:
             return
 
-        cat = read_events(self.cat_filename)
+        self.cat = read_events(self.cat_filename)
 
         # create empty data frame
         self.cat_df = pd.DataFrame(data=None, columns=['event_id', 'qtime', 'lat', 'lon', 'depth', 'mag'])
 
         # iterate through the events
-        for _i, event in enumerate(cat):
+        for _i, event in enumerate(self.cat):
             # Get quake origin info
             origin_info = event.preferred_origin() or event.origins[0]
 
@@ -1306,9 +1306,9 @@ class Window(QtGui.QMainWindow):
         focus_widget = QtGui.QApplication.focusWidget()
         # get the selected row number
         row_number = focus_widget.selectionModel().selectedRows()[0].row()
-        row_index = self.table_accessor[focus_widget][1][row_number]
+        self.cat_row_index = self.table_accessor[focus_widget][1][row_number]
 
-        self.selected_row = self.cat_df.loc[row_index]
+        self.selected_row = self.cat_df.loc[self.cat_row_index]
 
         net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
         print(net_sta_list)
@@ -1399,9 +1399,9 @@ class Window(QtGui.QMainWindow):
         focus_widget = self.tbl_view_dict["cat"]
         # get the selected row numbers
         row_number_list = [x.row() for x in focus_widget.selectionModel().selectedRows()]
-        row_index_list = [self.table_accessor[focus_widget][1][x] for x in row_number_list]
+        self.cat_row_index_list = [self.table_accessor[focus_widget][1][x] for x in row_number_list]
 
-        self.selected_row_list = [self.cat_df.loc[x] for x in row_index_list]
+        self.selected_row_list = [self.cat_df.loc[x] for x in self.cat_row_index_list]
 
         net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
         print(net_sta_list)
@@ -2272,6 +2272,9 @@ class Window(QtGui.QMainWindow):
         self.trace_tbld.trace_table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.trace_tbld.trace_table_view.customContextMenuRequested.connect(self.trace_tbl_view_popup)
 
+
+
+
     def extract_waveform_frm_ASDF(self, override, **kwargs):
         # Open a new st object
         self.st = Stream()
@@ -2357,8 +2360,8 @@ class Window(QtGui.QMainWindow):
                     temp_tr = None
 
                 # Now output data into new ASDF if required
-                if file_output:
-                    print("Outputting Data into ASDF file")
+                # if file_output:
+                #     print("Outputting Data into ASDF file")
         try:
             # TODO: Test if i need to do the final trim...
 
@@ -2371,6 +2374,9 @@ class Window(QtGui.QMainWindow):
                 print('\nTrimming Traces to specified time interval....')
                 self.st.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
                 self.update_waveform_plot()
+                # Now output data into new ASDF if required
+                if file_output:
+                    self.output_eq_asdf()
             else:
                 msg = QtGui.QMessageBox()
                 msg.setIcon(QtGui.QMessageBox.Critical)
@@ -2444,6 +2450,72 @@ class Window(QtGui.QMainWindow):
     #
     #
     #             self.update_waveform_plot()
+
+    def output_eq_asdf(self):
+        print("Outputting Data into ASDF file")
+        # open up dialog of where to save earthquake ASDF file
+        self.out_eq_filname = str(QtGui.QFileDialog.getSaveFileName(
+            parent=self, caption="Output EQ ASDF file",
+            directory=os.path.expanduser("~")))
+        if not self.out_eq_filname:
+            return
+
+
+        # make correct estension
+        if '.' in self.out_eq_filname:
+            self.out_eq_filname = self.out_eq_filname.split(".")[0] + ".h5"
+        else:
+            self.out_eq_filname = self.out_eq_filname + ".h5"
+
+        # remove the file if it already exists
+        if os._exists(self.out_eq_filname):
+            os.remove(self.out_eq_filname)
+
+
+        print(self.out_eq_filname)
+
+        # make a number into a 4 digit string
+        def mk_fourdig(a):
+            if len(str(a))==1:
+                return "000" + str(a)
+            elif len(str(a))==2:
+                return "00" + str(a)
+            elif len(str(a))==3:
+                return "0" + str(a)
+            else:
+                return a
+
+
+        # create the asdf file
+        self.out_eq_asdf = pyasdf.ASDFDataSet(self.out_eq_filname)
+
+        for _i, tr in enumerate(self.st):
+
+
+            # add the waveforms referenced to the earthquake
+            self.out_eq_asdf.add_waveforms(tr,tag="earthquake",
+                                           event_id=self.cat[self.cat_row_index],
+                                           labels=["pickid"+mk_fourdig(_i)])
+            print(tr.stats.network + "." + tr.stats.station)
+
+            print(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
+            self.out_eq_asdf.add_stationxml(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
+
+        # add the earthquake
+        self.out_eq_asdf.add_quakeml(self.cat[self.cat_row_index])
+
+        print(self.st)
+        print(self.selected_row)
+
+        # print(self.cat)
+        print(self.cat[self.cat_row_index])
+
+
+        # close the dataset
+        del self.out_eq_asdf
+
+
+
 
     def station_availability(self):
 
