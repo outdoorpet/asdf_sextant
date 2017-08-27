@@ -2387,7 +2387,6 @@ class Window(QtGui.QMainWindow):
         # print(kwargs["event_id"])
         # print(kwargs["event_df"])
 
-
         net_list = kwargs['net_list']
         sta_list = kwargs['sta_list']
         chan_list = kwargs['chan_list']
@@ -2405,7 +2404,6 @@ class Window(QtGui.QMainWindow):
             query = self.db.queryByTime(net_list, sta_list, chan_list, tags_list, interval_tuple[0], interval_tuple[1])
 
             self.st = self.query_to_stream(query, interval_tuple)
-
 
         # if there is no override flag then we want to extract data from a desired net/sta/chan and time interval
         # i.e. show the selection dialog
@@ -2443,13 +2441,7 @@ class Window(QtGui.QMainWindow):
             else:
                 return
 
-
-
-
         if not self.st == None:
-
-
-
             self.update_waveform_plot()
             # Now output data into new ASDF if required
             if file_output:
@@ -2457,6 +2449,11 @@ class Window(QtGui.QMainWindow):
 
                 keys_list = []
                 info_list = []
+
+                event = self.cat[self.cat_row_index]
+                # Get quake origin info
+                origin_info = event.preferred_origin() or event.origins[0]
+                event_id = str(event.resource_id.id).split('=')[1]
 
                 for tr in self.st:
 
@@ -2474,17 +2471,50 @@ class Window(QtGui.QMainWindow):
                     keys_list.append(str(ASDF_tag))
                     info_list.append(temp_dict)
 
+                    inv = self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML
+                    self.out_eq_asdf.add_stationxml(inv)
+
+                    # calculate the p-arrival time
+                    sta_coords = inv.get_coordinates(tr.get_id())
+
+                    dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
+                                                    sta_coords['longitude'],
+                                                    origin_info.latitude,
+                                                    origin_info.longitude)
+                    dist_deg = kilometer2degrees(dist / 1000.0)
+                    tt_model = TauPyModel(model='iasp91')
+                    arrivals = tt_model.get_travel_times(origin_info.depth / 1000.0, dist_deg, ('P'))
+
+                    # make parametric data such as expected earthquake arrival time and spce to pick arrivals
+                    # store in ASDF auxillary data
+
+                    data_type = "ArrivalData"
+                    data_path = event_id + "/" + tr.get_id().replace('.', '_')
+
+                    print(arrivals, arrivals[0])
+
+                    parameters = {"P": str(origin_info.time + arrivals[0].time),
+                                  "P_as": str(origin_info.time + arrivals[0].time - 60),
+                                  "distkm": dist/1000.0,
+                                  "dist_deg": dist_deg}
+
+
+
+
+
 
                     # add the waveforms referenced to the earthquake
                     self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
                                                    event_id=self.cat[self.cat_row_index])
-                    print(tr.stats.network + "." + tr.stats.station)
+                    self.out_eq_asdf.add_auxiliary_data(data=np.array([0]),
+                                                        data_type=data_type,
+                                                        path=data_path,
+                                                        parameters=parameters)
+                    # print(tr.stats.network + "." + tr.stats.station)
 
-                    print(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
-                    self.out_eq_asdf.add_stationxml(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
 
                 # add the earthquake
-                self.out_eq_asdf.add_quakeml(self.cat[self.cat_row_index])
+                self.out_eq_asdf.add_quakeml(event)
 
                 big_dictionary = dict(zip(keys_list, info_list))
 
@@ -2566,7 +2596,7 @@ class Window(QtGui.QMainWindow):
 
                     # Write info to trace header
                     tr.stats.distance = dist
-                    tr.stats.ptt = arrivals[0]
+                    tr.stats.ptt = arrivals[0].time
 
                 # Sort the st by distance from quake
                 self.st.sort(keys=['distance'])
