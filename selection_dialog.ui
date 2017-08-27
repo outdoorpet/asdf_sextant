@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>316</width>
-    <height>913</height>
+    <height>851</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -145,25 +145,6 @@
      </item>
     </layout>
    </item>
-   <item row="5" column="0">
-    <widget class="QListView" name="ChanListView">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>16777215</width>
-       <height>16777215</height>
-      </size>
-     </property>
-     <property name="selectionMode">
-      <enum>QAbstractItemView::MultiSelection</enum>
-     </property>
-    </widget>
-   </item>
    <item row="8" column="0">
     <layout class="QFormLayout" name="formLayout">
      <property name="fieldGrowthPolicy">
@@ -211,7 +192,7 @@
         <date>
          <year>1999</year>
          <month>12</month>
-         <day>27</day>
+         <day>26</day>
         </date>
        </property>
        <property name="displayFormat">
@@ -231,6 +212,25 @@
     <widget class="QLabel" name="chan_lbl">
      <property name="text">
       <string>Channels</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="0">
+    <widget class="QListView" name="ChanListView">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <property name="selectionMode">
+      <enum>QAbstractItemView::MultiSelection</enum>
      </property>
     </widget>
    </item>

@@ -573,10 +573,6 @@ class selectionDialog(QtGui.QDialog):
             self.selui.bef_quake_spinBox.setEnabled(False)
             self.selui.aft_quake_spinBox.setEnabled(False)
 
-        if self.gaps_analysis:
-            # we are looking at station availability only make one of channels and one of the tags available for selection
-            pass
-
         self.selui.check_all.clicked.connect(self.selectAllCheckChanged)
 
         # -------- add networks to network select items
@@ -623,6 +619,10 @@ class selectionDialog(QtGui.QDialog):
 
             self.chan_model.appendRow(item)
 
+        if self.gaps_analysis:
+            # we are looking at station availability only make one of channels and one of the tags available for selection
+            self.selui.ChanListView.clicked.connect(self.single_sel_chan)
+
         self.selui.ChanListView.setModel(self.chan_model)
 
         # -------- add ASDF tags to tags select items
@@ -637,6 +637,20 @@ class selectionDialog(QtGui.QDialog):
             self.tags_model.appendRow(item)
 
         self.selui.TagsListView.setModel(self.tags_model)
+
+
+    def single_sel_chan(self,index):
+        """
+        Uncheck all other channels except for one that was clicked on if we are analysing station availability
+        We only want to look at the availability of one station at a time
+        :return:
+        """
+
+        i=0
+        while self.chan_model.item(i):
+            if not self.chan_model.item(i).text() == index.data().toString():
+                self.chan_model.item(i).setCheckState(QtCore.Qt.Unchecked)
+            i += 1
 
     def selectAllCheckChanged(self):
         ''' updates the listview based on select all checkbox '''
