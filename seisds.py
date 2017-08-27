@@ -158,6 +158,62 @@ class SeisDB(object):
                     for k in _indexed_np_array_masked[0]}
 
     def get_recording_intervals(self, net, sta, chan, tags):
+        # print(self._indexed_np_array)
+        _indexed_np_array_masked = np.where(
+            (np.in1d(self._indexed_np_array['net'], net)) & (np.in1d(self._indexed_np_array['sta'], sta)) & (
+                np.in1d(self._indexed_np_array['cha'], chan)) & (np.in1d(self._indexed_np_array['tag'], tags)))
+
+        _masked_np_array = self._indexed_np_array[_indexed_np_array_masked]
+
+        _st_array = _masked_np_array["st"]
+        _et_array = _masked_np_array["et"]
+
+        _arg_sorted_st_array = np.argsort(_st_array)
+
+        _sorted_st_array = _st_array[_arg_sorted_st_array]
+        _sorted_et_array = _et_array[_arg_sorted_st_array]
+
+        # print(_sorted_st_array)
+        # print(_sorted_et_array)
+
+        # offset the starttime array so that we start from the second recorded waveform
+        _offset_st_array = _sorted_st_array[1:]
+
+        # print(_offset_st_array)
+
+        _diff_array = _offset_st_array - _sorted_et_array[:-1]
+
+        # print(_diff_array)
+
+        # now get indexes when gap (diff positive) or overlap (diff negative)
+        # remember to add 1 to index because of offset
+        _sorted_gaps_index = np.where(_diff_array > 1)
+
+        # print(_sorted_gaps_index)
+        #
+
+
+        # recording intervals:
+        # rec_start_list_after gaps = list(_sorted_st_array[_sorted_gaps_index])
+        rec_end_list_after_gaps = list(_sorted_et_array[_sorted_gaps_index])
+
+        rec_start_list =[]
+        rec_end_list =[]
+
+        int_id = 0
+        for _i in range(len(rec_end_list_after_gaps)):
+            rec_start_list.append(_sorted_st_array[int_id])
+            rec_end_list.append(rec_end_list_after_gaps[_i])
+            int_id = _sorted_gaps_index[0][_i] + 1
+            if _i == len(rec_end_list_after_gaps) - 1:
+                # last interval
+                # print(_sorted_st_array[int_id], _sorted_et_array[-1])
+                rec_start_list.append(_sorted_st_array[int_id])
+                rec_end_list.append(_sorted_et_array[-1])
+
+        return (np.array([rec_start_list, rec_end_list]))
+
+    def get_gaps_intervals(self, net, sta, chan, tags):
 
         # print(self._indexed_np_array)
         _indexed_np_array_masked = np.where(

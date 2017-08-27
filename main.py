@@ -387,29 +387,39 @@ class DataAvailPlot(QtGui.QDialog):
             pass
 
     def select_data(self):
-        # Launch the custom station/component selection dialog
-        sel_dlg = selectionDialog(parent=self, net_list=self.net_list, sta_list=self.sta_list, chan_list=self.chan_list,
-                                  tags_list=self.tags_list)
-        if sel_dlg.exec_():
-            self.select_net, self.select_sta, self.select_comp, self.select_tags = sel_dlg.getSelected()
 
-            # new list of stations nn.sssss format with only those in selected stations
-            net_sta_list = []
+        # enum_sta = list(enumerate(self.rec_int_dict.keys()))
+        enum_sta = list(enumerate(self.rec_int_dict.keys()))
 
-            for net_sta in self.rec_int_dict.keys():
-                net = net_sta.split('.')[0]
-                sta = net_sta.split('.')[1]
-                if (net in self.select_net and sta in self.select_sta):
-                    net_sta_list.append(net_sta)
+        # rearrange dict
+        self.sta_id_dict = dict([(b, a) for a, b in enum_sta])
 
-            # enum_sta = list(enumerate(self.rec_int_dict.keys()))
-            enum_sta = list(enumerate(net_sta_list))
+        self.y_axis_string = pg.AxisItem(orientation='left')
+        self.y_axis_string.setTicks([enum_sta])
 
-            # rearrange dict
-            self.sta_id_dict = dict([(b, a) for a, b in enum_sta])
-
-            self.y_axis_string = pg.AxisItem(orientation='left')
-            self.y_axis_string.setTicks([enum_sta])
+        # # Launch the custom station/component selection dialog
+        # sel_dlg = selectionDialog(parent=self, net_list=self.net_list, sta_list=self.sta_list, chan_list=self.chan_list,
+        #                           tags_list=self.tags_list)
+        # if sel_dlg.exec_():
+        #     self.select_net, self.select_sta, self.select_comp, self.select_tags = sel_dlg.getSelected()
+        #
+        #     # new list of stations nn.sssss format with only those in selected stations
+        #     net_sta_list = []
+        #
+        #     for net_sta in self.rec_int_dict.keys():
+        #         net = net_sta.split('.')[0]
+        #         sta = net_sta.split('.')[1]
+        #         if (net in self.select_net and sta in self.select_sta):
+        #             net_sta_list.append(net_sta)
+        #
+        #     # enum_sta = list(enumerate(self.rec_int_dict.keys()))
+        #     enum_sta = list(enumerate(net_sta_list))
+        #
+        #     # rearrange dict
+        #     self.sta_id_dict = dict([(b, a) for a, b in enum_sta])
+        #
+        #     self.y_axis_string = pg.AxisItem(orientation='left')
+        #     self.y_axis_string.setTicks([enum_sta])
 
     def plot_data(self):
 
@@ -438,8 +448,8 @@ class DataAvailPlot(QtGui.QDialog):
         # iterate through stations
         for stn_key, rec_array in self.rec_int_dict.iteritems():
 
-            if not stn_key.split('.')[1] in self.select_sta:
-                continue
+            # if not stn_key.split('.')[1] in self.select_sta:
+            #     continue
 
             # iterate through gaps list
             for _i in range(rec_array.shape[1]):
@@ -497,7 +507,7 @@ class DataAvailPlot(QtGui.QDialog):
             # make the region non moveable now
             self.lri.setMovable(False)
             # get the start and end time of extraction region and also return desired net/sta/chan and tags
-            return (self.xtract_method, self.select_net, self.select_sta, self.select_comp, self.select_tags,
+            return (self.xtract_method, self.net_list, self.sta_list, self.chan_list, self.tags_list,
                     self.lri.getRegion())
         elif self.xtract_method == "xcor_region":
             roi_limits_dict = {}
@@ -512,7 +522,7 @@ class DataAvailPlot(QtGui.QDialog):
 
                 roi_limits_dict[key.split('.')[1]] = (get_left_right_roi(bef_roi), get_left_right_roi(aft_roi))
             return (
-            self.xtract_method, self.select_net, self.select_sta, self.select_comp, self.select_tags, roi_limits_dict)
+            self.xtract_method, self.net_list, self.sta_list, self.chan_list, self.tags_list, roi_limits_dict)
         else:
             # no extraction region
             return None
@@ -573,15 +583,14 @@ class selectionDialog(QtGui.QDialog):
         self.net_model = QtGui.QStandardItemModel(self.selui.NetListView)
 
         self.net_list = net_list
-        if not net_list == None:
-            for net in self.net_list:
-                item = QtGui.QStandardItem(net)
-                item.setCheckable(True)
+        for net in self.net_list:
+            item = QtGui.QStandardItem(net)
+            item.setCheckable(True)
 
-                if len(net_list) == 1:
-                    item.setCheckState(QtCore.Qt.Checked)
+            if len(net_list) == 1:
+                item.setCheckState(QtCore.Qt.Checked)
 
-                self.net_model.appendRow(item)
+            self.net_model.appendRow(item)
 
         self.selui.NetListView.setModel(self.net_model)
 
@@ -589,15 +598,14 @@ class selectionDialog(QtGui.QDialog):
         self.sta_model = QtGui.QStandardItemModel(self.selui.StaListView)
 
         self.sta_list = sta_list
-        if not sta_list == None:
-            for sta in self.sta_list:
-                item = QtGui.QStandardItem(sta)
-                item.setCheckable(True)
+        for sta in self.sta_list:
+            item = QtGui.QStandardItem(sta)
+            item.setCheckable(True)
 
-                if len(sta_list) == 1:
-                    item.setCheckState(QtCore.Qt.Checked)
+            if len(sta_list) == 1:
+                item.setCheckState(QtCore.Qt.Checked)
 
-                self.sta_model.appendRow(item)
+            self.sta_model.appendRow(item)
 
         self.selui.StaListView.setModel(self.sta_model)
         # cnnect to method to update stae of select all checkbox
@@ -683,10 +691,7 @@ class selectionDialog(QtGui.QDialog):
             i += 1
         if self.no_time:
             # Return Selected networks, stations and selected channels, tags
-            if not self.gaps_analysis:
-                return (select_networks, select_stations, select_channels, select_tags)
-            elif self.gaps_analysis:
-                return (select_channels, select_tags)
+            return (select_networks, select_stations, select_channels, select_tags)
         else:
             # Return Selected networks, stations and selected channels, tags and start and end times and
             # before quake and after quake extraction times(or defaults)
@@ -1242,14 +1247,14 @@ class Window(QtGui.QMainWindow):
         """
         Fill the station tree widget upon opening a new file.
         """
-        # asdf_file = str(QtGui.QFileDialog.getOpenFileName(
-        #     parent=self, caption="Choose ASDF File",
-        #     directory=os.path.expanduser("~"),
-        #     filter="ASDF files (*.h5)"))
-        # if not asdf_file:
-        #     return
+        asdf_file = str(QtGui.QFileDialog.getOpenFileName(
+            parent=self, caption="Choose ASDF File",
+            directory=os.path.expanduser("~"),
+            filter="ASDF files (*.h5)"))
+        if not asdf_file:
+            return
 
-        asdf_file = "/Users/ashbycooper/Desktop/Passive/_GA_ANUtest/XX/ASDF/XX.h5"
+        # asdf_file = "/Users/ashbycooper/Desktop/Passive/_GA_ANUtest/XX/ASDF/XX.h5"
 
         asdf_filename = basename(asdf_file)
 
@@ -2482,7 +2487,7 @@ class Window(QtGui.QMainWindow):
         # method by using prev/next interval buttons
         # I.e. dont bring up the station selection dialog pop-up - just use get whatever is in the current view
         if override:
-
+            file_output = False
             interval_tuple = (ph_st.timestamp, ph_et.timestamp)
             query = self.db.queryByTime(net_list, sta_list, chan_list, tags_list, interval_tuple[0], interval_tuple[1])
 
@@ -2772,86 +2777,111 @@ class Window(QtGui.QMainWindow):
 
         # open up the selection dialog for the user to select which data to display availability info
         # Launch the custom station/component selection dialog
-        sel_dlg = selectionDialog(parent=self, chan_list=chan_list,
+        sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
                                   tags_list=tags_list, gaps_analysis=True)
         if sel_dlg.exec_():
             # there will only be one chan and one tag selected
-            select_chan, select_tags = sel_dlg.getSelected()
+            select_net, select_sta, select_chan, select_tags = sel_dlg.getSelected()
 
-            # now calculate recording intervals and gaps for all stations
-            for _i, net_sta in enumerate(net_sta_list):
-                stnxml = self.ds.waveforms[net_sta].StationXML
-                # get the start recording interval
-                #  and get the end recording interval
-                try:
-                    rec_start = UTCDateTime(stnxml[0][0].start_date).timestamp or \
-                                UTCDateTime(stnxml[0][0].creation_date).timestamp
-                    rec_end = UTCDateTime(stnxml[0][0].end_date).timestamp or \
-                              UTCDateTime(stnxml[0][0].termination_date).timestamp
-                except AttributeError:
-                    print("No start/end dates found in XML")
-                    break
+            for net_sta in net_sta_list:
 
-                print("\r Working on Station: " + net_sta + ", " + str(_i + 1) + " of " + \
-                              str(len(net_sta_list)) + " Stations", )
-                sys.stdout.flush()
+                if net_sta.split('.')[0] in select_net and net_sta.split('.')[1] in select_sta:
+                    # get the recording intervals of the station for the selected channel and tag
+                    intervals_array = self.db.get_recording_intervals(net_sta.split('.')[0], net_sta.split('.')[1], select_chan[0], select_tags[0])
 
-                gaps_array = self.db.get_recording_intervals(net=net_sta.split('.')[0],sta = net_sta.split('.')[1], chan = select_chan, tags=select_tags)
+                    # intervals_no = intervals_array.shape[1]
 
-                self.recording_gaps[net_sta] = gaps_array
+                    self.recording_intervals[net_sta] = intervals_array
 
-                temp_start_int = []
-                temp_end_int = []
+            # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
+            if hasattr(self, "cat_df"):
 
-                gaps_no = gaps_array.shape[1]
+                self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+                                                 chan_list=select_chan, tags_list=tags_list,
+                                                 rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
+            else:
+                self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+                                                 chan_list=select_chan, tags_list=tags_list,
+                                                 rec_int_dict=self.recording_intervals)
 
-                prev_endtime = ''
+            # connect to the go button in plot
+            self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
 
-                if gaps_no == 0:
-                    temp_start_int.append(rec_start)
-                    temp_end_int.append(rec_end)
-                else:
-                    # populate the recording intervals dictionary
-                    for _j in range(gaps_no):
-                        gap_start = gaps_array[0, _j]
-                        gap_end = gaps_array[1, _j]
 
-                        if _j == 0:
-                            # first interval
-                            # print(UTCDateTime(rec_start).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
-                            temp_start_int.append(rec_start)
-                            temp_end_int.append(gap_start)
-                            prev_endtime = gap_end
-
-                        if _j == gaps_no - 1:
-                            # last interval
-                            # print(UTCDateTime(gap_entry['gap_end']).ctime(), UTCDateTime(rec_end).ctime())
-                            temp_start_int.append(gap_end)
-                            temp_end_int.append(rec_end)
-
-                        elif not _j == 0 and not _j == gaps_no - 1:
-                            # print(UTCDateTime(gaps_list[_j-1]['gap_end']).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
-                            temp_start_int.append(prev_endtime)
-                            temp_end_int.append(gap_start)
-                            prev_endtime = gap_end
-
-                # the [1] element of shape is the number of intervals
-                rec_int_array = np.array([temp_start_int, temp_end_int])
-                self.recording_intervals[net_sta] = rec_int_array
-
-                # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
-                if hasattr(self, "cat_df"):
-
-                    self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
-                                                     chan_list=select_chan, tags_list=tags_list,
-                                                     rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
-                else:
-                    self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
-                                                     chan_list=select_chan, tags_list=tags_list,
-                                                     rec_int_dict=self.recording_intervals)
-
-                # connect to the go button in plot
-                self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
+            # # now calculate recording intervals and gaps for all stations
+            # for _i, net_sta in enumerate(net_sta_list):
+            #     stnxml = self.ds.waveforms[net_sta].StationXML
+            #     # get the start recording interval
+            #     #  and get the end recording interval
+            #     try:
+            #         rec_start = UTCDateTime(stnxml[0][0].start_date).timestamp or \
+            #                     UTCDateTime(stnxml[0][0].creation_date).timestamp
+            #         rec_end = UTCDateTime(stnxml[0][0].end_date).timestamp or \
+            #                   UTCDateTime(stnxml[0][0].termination_date).timestamp
+            #     except AttributeError:
+            #         print("No start/end dates found in XML")
+            #         break
+            #
+            #     print("\r Working on Station: " + net_sta + ", " + str(_i + 1) + " of " + \
+            #                   str(len(net_sta_list)) + " Stations", )
+            #     sys.stdout.flush()
+            #
+            #     gaps_array = self.db.get_recording_intervals(net=net_sta.split('.')[0],sta = net_sta.split('.')[1], chan = select_chan, tags=select_tags)
+            #
+            #     self.recording_gaps[net_sta] = gaps_array
+            #
+            #     temp_start_int = []
+            #     temp_end_int = []
+            #
+            #     gaps_no = gaps_array.shape[1]
+            #
+            #     prev_endtime = ''
+            #
+            #     if gaps_no == 0:
+            #         temp_start_int.append(rec_start)
+            #         temp_end_int.append(rec_end)
+            #     else:
+            #         # populate the recording intervals dictionary
+            #         for _j in range(gaps_no):
+            #             gap_start = gaps_array[0, _j]
+            #             gap_end = gaps_array[1, _j]
+            #
+            #             if _j == 0:
+            #                 # first interval
+            #                 # print(UTCDateTime(rec_start).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
+            #                 temp_start_int.append(rec_start)
+            #                 temp_end_int.append(gap_start)
+            #                 prev_endtime = gap_end
+            #
+            #             if _j == gaps_no - 1:
+            #                 # last interval
+            #                 # print(UTCDateTime(gap_entry['gap_end']).ctime(), UTCDateTime(rec_end).ctime())
+            #                 temp_start_int.append(gap_end)
+            #                 temp_end_int.append(rec_end)
+            #
+            #             elif not _j == 0 and not _j == gaps_no - 1:
+            #                 # print(UTCDateTime(gaps_list[_j-1]['gap_end']).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
+            #                 temp_start_int.append(prev_endtime)
+            #                 temp_end_int.append(gap_start)
+            #                 prev_endtime = gap_end
+            #
+            #     # the [1] element of shape is the number of intervals
+            #     rec_int_array = np.array([temp_start_int, temp_end_int])
+            #     self.recording_intervals[net_sta] = rec_int_array
+            #
+            #     # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
+            #     if hasattr(self, "cat_df"):
+            #
+            #         self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+            #                                          chan_list=select_chan, tags_list=tags_list,
+            #                                          rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
+            #     else:
+            #         self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+            #                                          chan_list=select_chan, tags_list=tags_list,
+            #                                          rec_int_dict=self.recording_intervals)
+            #
+            #     # connect to the go button in plot
+            #     self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
 
         #
         # # iterate through stations
