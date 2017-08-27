@@ -219,6 +219,16 @@ class SeisDB(object):
         else:
             return (np.unique(self._indexed_np_array['cha']), np.unique(self._indexed_np_array['tag']))
 
+    def retrieve_full_db_entry(self, json_key):
+        """
+        Method to take an output from queryByTime and get the full information from the original JSON db
+        :return: full DB
+        """
+
+        # for
+        print(self._json_dict[json_key])
+        return(self._json_dict[json_key])
+
 
 
 if __name__ == "__main__":

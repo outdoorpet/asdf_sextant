@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>1440</width>
-    <height>900</height>
+    <height>851</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -33,7 +33,7 @@
     <item>
      <widget class="QTabWidget" name="central_tab">
       <property name="currentIndex">
-       <number>0</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="waveform_tab">
        <attribute name="title">
@@ -388,14 +388,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QTableView" name="events_table_view">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-           </widget>
+           <widget class="QTextBrowser" name="events_text_browser"/>
           </item>
          </layout>
         </item>

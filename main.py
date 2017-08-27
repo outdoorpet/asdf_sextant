@@ -31,6 +31,7 @@ import functools
 import math
 import inspect
 import importlib
+import json
 
 from distutils.util import strtobool
 
@@ -43,6 +44,10 @@ from obspy.clients.fdsn.header import FDSNException
 from DateAxisItem import DateAxisItem
 from seisds import SeisDB
 from query_input_yes_no import query_yes_no
+
+from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
+from obspy.taup import TauPyModel
+
 
 # TODO: Add in ability to multiplot in auxillary data view
 # TODO: add in scroll bar to plot window when there are too many plots (like QC_P_time_compare)
@@ -1420,7 +1425,9 @@ class Window(QtGui.QMainWindow):
             select_net, select_sta, select_chan, select_tags, st, et, file_output, ref_stn_out, \
             bef_quake_xt, aft_quake_xt = sel_dlg.getSelected()
 
-            self.output_eq_asdf()
+            self.initiate_output_eq_asdf()
+            keys_list = []
+            info_list = []
 
             for _i, sel_quake in enumerate(self.selected_row_list):
                 qtime = sel_quake['qtime']
@@ -1440,6 +1447,19 @@ class Window(QtGui.QMainWindow):
                 print(self.st)
 
                 for tr in self.st:
+                    # The ASDF formatted waveform name [full_id, station_id, starttime, endtime, tag]
+                    ASDF_tag = self.make_ASDF_tag(tr, "earthquake").encode('ascii')
+
+                    # get the json dict entry for the original trace
+                    temp_dict = self.db.retrieve_full_db_entry(tr.stats.asdf.orig_id)
+
+                    # modify the start and end times of the trace ti be correct
+                    temp_dict["tr_starttime"] = tr.stats.starttime.timestamp
+                    temp_dict["tr_endtime"] = tr.stats.endtime.timestamp
+
+                    keys_list.append(str(ASDF_tag))
+                    info_list.append(temp_dict)
+
                     # add the waveforms referenced to the earthquake
                     self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
                                                    event_id=self.cat[self.cat_row_index_list[_i]])
@@ -1449,10 +1469,13 @@ class Window(QtGui.QMainWindow):
                 # add the earthquake
                 self.out_eq_asdf.add_quakeml(self.cat[self.cat_row_index_list[_i]])
 
+            big_dictionary = dict(zip(keys_list, info_list))
+
+            with open(self.json_out, 'w') as fp:
+                json.dump(big_dictionary, fp)
+
             # close the dataset
             del self.out_eq_asdf
-
-
 
     def on_detrend_and_demean_check_box_stateChanged(self, state):
         self.update_waveform_plot()
@@ -2311,12 +2334,18 @@ class Window(QtGui.QMainWindow):
         st = Stream()
 
         for matched_info in query.values():
+
+            # self.db.retrieve_full_db_entry(matched_info["ASDF_tag"])
+
             # read the data from the ASDF into stream
             temp_tr = self.ds.waveforms[matched_info["new_network"] + '.' + matched_info["new_station"]][
                 matched_info["ASDF_tag"]][0]
 
             # trim trace to start and endtime
             temp_tr.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
+
+            # append the asdf id tag into the trace stats so that the original data is accesbale
+            temp_tr.stats.asdf.orig_id = matched_info["ASDF_tag"]
 
             # append trace to stream
             st += temp_tr
@@ -2418,12 +2447,34 @@ class Window(QtGui.QMainWindow):
 
 
         if not self.st == None:
+
+
+
             self.update_waveform_plot()
             # Now output data into new ASDF if required
             if file_output:
-                self.output_eq_asdf()
+                self.initiate_output_eq_asdf()
+
+                keys_list = []
+                info_list = []
 
                 for tr in self.st:
+
+
+                    # The ASDF formatted waveform name [full_id, station_id, starttime, endtime, tag]
+                    ASDF_tag = self.make_ASDF_tag(tr, "earthquake").encode('ascii')
+
+                    # get the json dict entry for the original trace
+                    temp_dict = self.db.retrieve_full_db_entry(tr.stats.asdf.orig_id)
+
+                    # modify the start and end times of the trace ti be correct
+                    temp_dict["tr_starttime"]=tr.stats.starttime.timestamp
+                    temp_dict["tr_endtime"]=tr.stats.endtime.timestamp
+
+                    keys_list.append(str(ASDF_tag))
+                    info_list.append(temp_dict)
+
+
                     # add the waveforms referenced to the earthquake
                     self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
                                                    event_id=self.cat[self.cat_row_index])
@@ -2432,78 +2483,111 @@ class Window(QtGui.QMainWindow):
                     print(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
                     self.out_eq_asdf.add_stationxml(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
 
-                    # add the earthquake
+                # add the earthquake
                 self.out_eq_asdf.add_quakeml(self.cat[self.cat_row_index])
 
-                print(self.st)
-                print(self.selected_row)
+                big_dictionary = dict(zip(keys_list, info_list))
+
+                with open(self.json_out, 'w') as fp:
+                    json.dump(big_dictionary, fp)
+
+                # print(self.st)
+                # print(self.selected_row)
 
                 # print(self.cat)
-                print(self.cat[self.cat_row_index])
+                # print(self.cat[self.cat_row_index])
 
                 # close the dataset
                 del self.out_eq_asdf
 
-    # TODO: re-write earthquake extraction
-    # def analyse_earthquake(self, event_obj):
-    #     # Get event catalogue
-    #     self.event_cat = self.ds.events
-    #     comp_list = ['*Z', '*N', '*E']
-    #
-    #
-    #     # Launch the custom station/component selection dialog
-    #     sel_dlg = selectionDialog(parent=self, sta_list=self.ds.waveforms.list())
-    #     if sel_dlg.exec_():
-    #         select_sta, bool_comp = sel_dlg.getSelected()
-    #         query_comp = list(itertools.compress(comp_list, bool_comp))
-    #
-    #         # Open up a new stream object
-    #         self.st = Stream()
-    #
-    #         # use the ifilter functionality to extract desired streams to visualize
-    #         for station in self.ds.ifilter(self.ds.q.station == map(lambda el: el.split('.')[1], select_sta),
-    #                                        self.ds.q.channel == query_comp,
-    #                                        self.ds.q.event == event_obj):
-    #             for filtered_id in station.list():
-    #                 if filtered_id == 'StationXML':
-    #                     continue
-    #                 self.st += station[filtered_id]
-    #
-    #         if self.st.__nonzero__():
-    #             print(self.st)
-    #             # Get quake origin info
-    #             origin_info = event_obj.preferred_origin() or event_obj.origins[0]
-    #
-    #             # Iterate through traces
-    #             for tr in self.st:
-    #                 # Run Java Script to highlight all selected stations in station view
-    #                 js_call = "highlightStation('{station}')".format(station=tr.stats.network + '.' +tr.stats.station)
-    #                 self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-    #
-    #
-    #                 # Get inventory for trace
-    #                 inv = self.ds.waveforms[tr.stats.network + '.' +tr.stats.station].StationXML
-    #                 sta_coords = inv.get_coordinates(tr.get_id())
-    #
-    #                 dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
-    #                                                 sta_coords['longitude'],
-    #                                                 origin_info.latitude,
-    #                                                 origin_info.longitude)
-    #                 dist_deg = kilometer2degrees(dist/1000.0)
-    #                 tt_model = TauPyModel(model='iasp91')
-    #                 arrivals = tt_model.get_travel_times(origin_info.depth/1000.0, dist_deg, ('P'))
-    #
-    #                 # Write info to trace header
-    #                 tr.stats.distance = dist
-    #                 tr.stats.ptt = arrivals[0]
-    #
-    #             # Sort the st by distance from quake
-    #             self.st.sort(keys=['distance'])
-    #
-    #
-    #             self.update_waveform_plot()
+    def analyse_earthquake(self, event_obj):
+        # Get event catalogue
+        self.event_cat = self.ds.events
 
-    def output_eq_asdf(self):
+        net_set = set()
+
+        net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
+        # create station list with just station names without network code
+        sta_list = [x.split('.')[1] for x in net_sta_list]
+
+        for x in net_sta_list:
+            sta_list.append(x.split('.')[1])
+            net_set.add(x.split('.')[0])
+
+        net_list = list(net_set)
+
+        chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
+        tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
+
+
+        # Launch the custom station/component selection dialog
+        sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
+                                      tags_list=tags_list)
+        if sel_dlg.exec_():
+            select_net, select_sta, select_chan, select_tags = sel_dlg.getSelected()
+
+            # Open up a new stream object
+            self.st = Stream()
+
+            # use the ifilter functionality to extract desired streams to visualize
+            for station in self.ds.ifilter(self.ds.q.station == select_sta,
+                                           self.ds.q.channel == select_chan,
+                                           self.ds.q.event == event_obj):
+                for filtered_id in station.list():
+                    if filtered_id == 'StationXML':
+                        continue
+                    self.st += station[filtered_id]
+
+            print(self.st)
+            #
+            if self.st.__nonzero__():
+                print(self.st)
+                # Get quake origin info
+                origin_info = event_obj.preferred_origin() or event_obj.origins[0]
+
+                # Iterate through traces
+                for tr in self.st:
+                    # Run Java Script to highlight all selected stations in station view
+                    js_call = "highlightStation('{station}')".format(station=tr.stats.network + '.' +tr.stats.station)
+                    self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+
+
+                    # Get inventory for trace
+                    inv = self.ds.waveforms[tr.stats.network + '.' +tr.stats.station].StationXML
+                    sta_coords = inv.get_coordinates(tr.get_id())
+
+                    dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
+                                                    sta_coords['longitude'],
+                                                    origin_info.latitude,
+                                                    origin_info.longitude)
+                    dist_deg = kilometer2degrees(dist/1000.0)
+                    tt_model = TauPyModel(model='iasp91')
+                    arrivals = tt_model.get_travel_times(origin_info.depth/1000.0, dist_deg, ('P'))
+
+                    # Write info to trace header
+                    tr.stats.distance = dist
+                    tr.stats.ptt = arrivals[0]
+
+                # Sort the st by distance from quake
+                self.st.sort(keys=['distance'])
+
+
+                self.update_waveform_plot()
+
+    # function to create the ASDF waveform ID tag
+    def make_ASDF_tag(self, tr, tag):
+        # def make_ASDF_tag(ri, tag):
+        data_name = "{net}.{sta}.{loc}.{cha}__{start}__{end}__{tag}".format(
+            net=tr.stats.network,
+            sta=tr.stats.station,
+            loc=tr.stats.location,
+            cha=tr.stats.channel,
+            start=tr.stats.starttime.strftime("%Y-%m-%dT%H:%M:%S"),
+            end=tr.stats.endtime.strftime("%Y-%m-%dT%H:%M:%S"),
+            tag=tag)
+        return data_name
+
+    def initiate_output_eq_asdf(self):
         print("Outputting Data into ASDF file")
         # open up dialog of where to save earthquake ASDF file
         self.out_eq_filname = str(QtGui.QFileDialog.getSaveFileName(
@@ -2524,15 +2608,19 @@ class Window(QtGui.QMainWindow):
             os.remove(self.out_eq_filname)
 
 
-        print(self.out_eq_filname)
+        # output json filename
+        self.json_out = self.out_eq_filname.split(".")[0] + ".json"
+
+        # remove if exists
+        if os.path.exists(self.json_out):
+            os.remove(self.json_out)
+
+
+        # print(self.out_eq_filname)
 
 
         # create the asdf file
         self.out_eq_asdf = pyasdf.ASDFDataSet(self.out_eq_filname)
-
-
-
-
 
     def station_availability(self):
 
