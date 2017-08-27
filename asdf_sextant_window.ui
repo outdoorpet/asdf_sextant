@@ -29,8 +29,8 @@
      <verstretch>0</verstretch>
     </sizepolicy>
    </property>
-   <layout class="QHBoxLayout" name="horizontalLayout_13">
-    <item>
+   <layout class="QGridLayout" name="gridLayout_3">
+    <item row="0" column="0">
      <widget class="QTabWidget" name="central_tab">
       <property name="currentIndex">
        <number>0</number>
@@ -39,9 +39,9 @@
        <attribute name="title">
         <string notr="true">Waveforms</string>
        </attribute>
-       <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="3,10">
-        <item>
-         <layout class="QVBoxLayout" name="verticalLayout_3" stretch="1,10,4">
+       <layout class="QGridLayout" name="gridLayout_2">
+        <item row="0" column="0">
+         <layout class="QVBoxLayout" name="verticalLayout_3">
           <item>
            <widget class="QCheckBox" name="group_by_network_check_box">
             <property name="text">
@@ -54,6 +54,12 @@
           </item>
           <item>
            <widget class="StationTreeWidget" name="station_view">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
             <property name="horizontalScrollBarPolicy">
              <enum>Qt::ScrollBarAsNeeded</enum>
             </property>
@@ -75,6 +81,24 @@
           </item>
           <item>
            <widget class="QWebView" name="web_view" native="true">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>321</width>
+              <height>211</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>211</height>
+             </size>
+            </property>
             <property name="url" stdset="0">
              <url>
               <string>about:blank</string>
@@ -84,7 +108,7 @@
           </item>
          </layout>
         </item>
-        <item>
+        <item row="0" column="1">
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_2">
@@ -192,20 +216,18 @@
            </layout>
           </item>
           <item>
-           <widget class="MultiPlotWidget" name="graph">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="mouseTracking">
-             <bool>false</bool>
-            </property>
-            <property name="toolTip">
-             <string/>
-            </property>
-           </widget>
+           <layout class="QVBoxLayout" name="placeholder_layout">
+            <item>
+             <widget class="QWidget" name="placeholder_widget" native="true">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
          </layout>
         </item>
@@ -394,10 +416,235 @@
         </item>
        </layout>
       </widget>
+      <widget class="QWidget" name="p_time_analysis_tab">
+       <attribute name="title">
+        <string>P-Time Analysis</string>
+       </attribute>
+       <layout class="QGridLayout" name="gridLayout">
+        <item row="0" column="0">
+         <layout class="QHBoxLayout" name="horizontalLayout_14">
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout">
+            <item>
+             <layout class="QHBoxLayout" name="buttons_hbox">
+              <item>
+               <widget class="QPushButton" name="sort_drop_down_button_2">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>85</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Sort</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="plot_single_stn_button">
+                <property name="text">
+                 <string>Plot Single Stn Residual</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="gather_events_checkbox">
+                <property name="maximumSize">
+                 <size>
+                  <width>118</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Gather Events</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_buttons">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="GraphicsLayoutWidget" name="p_graph_view"/>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_pick_tools">
+              <property name="sizeConstraint">
+               <enum>QLayout::SetDefaultConstraint</enum>
+              </property>
+              <item>
+               <widget class="QLabel" name="min_lb">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Min</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="GradientWidget" name="col_grad_w">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Maximum">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>637</width>
+                  <height>21</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="max_lb">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Max</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pick_reset_view_button">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>41</width>
+                  <height>31</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_pick_tools">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QGridLayout" name="map_grid_layout">
+            <item row="1" column="0">
+             <widget class="Line" name="map_top_line">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="0">
+             <widget class="QWebView" name="map_view_events" native="true">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Maximum" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>400</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="url" stdset="0">
+               <url>
+                <string>about:blank</string>
+               </url>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="0">
+             <spacer name="verticalSpacer_map">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeType">
+               <enum>QSizePolicy::Fixed</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>25</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item row="2" column="0">
+             <widget class="QWebView" name="map_view_station" native="true">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Maximum" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>400</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="url" stdset="0">
+               <url>
+                <string>about:blank</string>
+               </url>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0">
+             <widget class="Line" name="map_bottom_line">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
      </widget>
-    </item>
-    <item>
-     <layout class="QHBoxLayout" name="horizontalLayout"/>
     </item>
    </layout>
   </widget>
@@ -493,7 +740,7 @@
    <header>station_tree_widget.h</header>
   </customwidget>
   <customwidget>
-   <class>MultiPlotWidget</class>
+   <class>GradientWidget</class>
    <extends>QGraphicsView</extends>
    <header>pyqtgraph</header>
   </customwidget>

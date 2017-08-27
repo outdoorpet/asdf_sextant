@@ -48,6 +48,8 @@ from query_input_yes_no import query_yes_no
 from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
 from obspy.taup import TauPyModel
 
+from MyMultiPlotWidget import MyMultiPlotWidget
+
 
 # TODO: Add in ability to multiplot in auxillary data view
 # TODO: add in scroll bar to plot window when there are too many plots (like QC_P_time_compare)
@@ -912,6 +914,32 @@ class Window(QtGui.QMainWindow):
         self.ui.detrend_and_demean_check_box.setEnabled(False)
         self.ui.normalize_check_box.setEnabled(False)
         self.ui.waveform_filter_check_box.setEnabled(False)
+
+        self.ui.plot_single_stn_button.released.connect(self.plot_single_stn_selected)
+        self.ui.gather_events_checkbox.stateChanged.connect(self.gather_events_checkbox_selected)
+
+        self.ui.sort_drop_down_button.setEnabled(False)
+        self.ui.plot_single_stn_button.setEnabled(False)
+        self.ui.gather_events_checkbox.setEnabled(False)
+
+        self.ui.col_grad_w.loadPreset('spectrum')
+        self.ui.col_grad_w.setEnabled(False)
+        self.ui.col_grad_w.setToolTip("""
+                                - Click a triangle to change its color
+                                - Drag triangles to move
+                                - Click in an empty area to add a new color
+                                - Right click a triangle to remove
+                                """)
+
+        self.ui.pick_reset_view_button.setIcon(QtGui.QIcon('eLsS8.png'))
+        self.ui.pick_reset_view_button.released.connect(self.reset_plot_view)
+        self.ui.pick_reset_view_button.setToolTip("Reset the scatter plot zoom and sort method")
+
+        self.waveform_graph = MyMultiPlotWidget()
+
+        self.ui.placeholder_layout.takeAt(0)
+        self.ui.placeholder_layout.addWidget(self.waveform_graph)
+
         # self.ui.waveform_filter_settings_toolButton.setEnabled(False)
 
         # self.ui.actionXCOR.triggered.connect(self.get_xcor_data)
@@ -972,7 +1000,7 @@ class Window(QtGui.QMainWindow):
         self.read_ASDF_info()
 
     def changed_widget_focus(self):
-        if QtGui.QApplication.focusWidget() == self.ui.graph:
+        if QtGui.QApplication.focusWidget() == self.waveform_graph:
             # Access the state dictionary and iterate through all stations in graph then highlight statins on web view
             try:
                 for station_id in self._state["station_id"]:
@@ -1572,7 +1600,7 @@ class Window(QtGui.QMainWindow):
 
     def on_graph_itemClicked(self, event):
         if event.button() == 4:
-            items = self.ui.graph.scene().items(event.scenePos())
+            items = self.waveform_graph.scene().items(event.scenePos())
             sel_plot = [x for x in items if isinstance(x, pg.PlotItem)][0]
             pos = QtCore.QPointF(event.scenePos())
 
@@ -1694,8 +1722,8 @@ class Window(QtGui.QMainWindow):
             else:
                 temp_st.filter("bandpass", freqmin=0.01, freqmax=10)
 
-        self.ui.graph.clear()
-        self.ui.graph.setMinimumPlotHeight(200)
+        self.waveform_graph.clear()
+        self.waveform_graph.setMinimumPlotHeight(200)
 
         starttimes = []
         endtimes = []
@@ -1706,7 +1734,7 @@ class Window(QtGui.QMainWindow):
         self._state["station_id"] = []
         self._state["station_tag"] = []
         for _i, tr in enumerate(temp_st):
-            plot = self.ui.graph.addPlot(
+            plot = self.waveform_graph.addPlot(
                 _i, 0, title=tr.id,
                 axisItems={'bottom': DateAxisItem(orientation='bottom',
                                                   utcOffset=0)})
@@ -3267,6 +3295,15 @@ class Window(QtGui.QMainWindow):
 
             # add in station xml
             xcor_ds.add_stationxml(select_inv)
+
+    def plot_single_stn_selected(self):
+        pass
+
+    def gather_events_checkbox_selected(self):
+        pass
+
+    def reset_plot_view(self):
+        pass
 
 
 def launch():
