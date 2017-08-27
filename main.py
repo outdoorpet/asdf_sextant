@@ -619,9 +619,7 @@ class selectionDialog(QtGui.QDialog):
 
             self.chan_model.appendRow(item)
 
-        if self.gaps_analysis:
-            # we are looking at station availability only make one of channels and one of the tags available for selection
-            self.selui.ChanListView.clicked.connect(self.single_sel_chan)
+
 
         self.selui.ChanListView.setModel(self.chan_model)
 
@@ -637,6 +635,24 @@ class selectionDialog(QtGui.QDialog):
             self.tags_model.appendRow(item)
 
         self.selui.TagsListView.setModel(self.tags_model)
+
+        if self.gaps_analysis:
+            # we are looking at station availability only make one of channels and one of the tags available for selection
+            self.selui.ChanListView.clicked.connect(self.single_sel_chan)
+            self.selui.TagsListView.clicked.connect(self.single_sel_tags)
+
+    def single_sel_tags(self,index):
+        """
+        Uncheck all other channels except for one that was clicked on if we are analysing station availability
+        We only want to look at the availability of one station at a time
+        :return:
+        """
+
+        i = 0
+        while self.tags_model.item(i):
+            if not self.tags_model.item(i).text() == index.data().toString():
+                self.tags_model.item(i).setCheckState(QtCore.Qt.Unchecked)
+            i += 1
 
 
     def single_sel_chan(self,index):
