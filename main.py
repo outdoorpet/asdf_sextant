@@ -526,10 +526,11 @@ class selectionDialog(QtGui.QDialog):
     '''
 
     def __init__(self, parent=None, net_list=None, sta_list=None, chan_list=None, tags_list=None, ph_start=None,
-                 ph_end=None, xquake=None):
+                 ph_end=None, xquake=None, gaps_analysis=False):
         QtGui.QDialog.__init__(self, parent)
         self.selui = Ui_SelectDialog()
         self.selui.setupUi(self)
+        self.gaps_analysis = gaps_analysis
         # self.setWindowTitle('Selection Dialog')
 
         # Set all check box to checked
@@ -553,7 +554,6 @@ class selectionDialog(QtGui.QDialog):
                 self.selui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
                 self.selui.endtime.setDateTime(QtCore.QDateTime.fromString(ph_end, "yyyy-MM-ddThh:mm:ss"))
 
-
         elif xquake == False:
             self.no_time = False
             self.selui.starttime.setDateTime(QtCore.QDateTime.fromString(ph_start, "yyyy-MM-ddThh:mm:ss"))
@@ -563,8 +563,9 @@ class selectionDialog(QtGui.QDialog):
             self.selui.bef_quake_spinBox.setEnabled(False)
             self.selui.aft_quake_spinBox.setEnabled(False)
 
-
-
+        if self.gaps_analysis:
+            # we are looking at station availability only make one of channels and one of the tags available for selection
+            pass
 
         self.selui.check_all.clicked.connect(self.selectAllCheckChanged)
 
@@ -572,14 +573,15 @@ class selectionDialog(QtGui.QDialog):
         self.net_model = QtGui.QStandardItemModel(self.selui.NetListView)
 
         self.net_list = net_list
-        for net in self.net_list:
-            item = QtGui.QStandardItem(net)
-            item.setCheckable(True)
+        if not net_list == None:
+            for net in self.net_list:
+                item = QtGui.QStandardItem(net)
+                item.setCheckable(True)
 
-            if len(net_list) == 1:
-                item.setCheckState(QtCore.Qt.Checked)
+                if len(net_list) == 1:
+                    item.setCheckState(QtCore.Qt.Checked)
 
-            self.net_model.appendRow(item)
+                self.net_model.appendRow(item)
 
         self.selui.NetListView.setModel(self.net_model)
 
@@ -587,17 +589,18 @@ class selectionDialog(QtGui.QDialog):
         self.sta_model = QtGui.QStandardItemModel(self.selui.StaListView)
 
         self.sta_list = sta_list
-        for sta in self.sta_list:
-            item = QtGui.QStandardItem(sta)
-            item.setCheckable(True)
+        if not sta_list == None:
+            for sta in self.sta_list:
+                item = QtGui.QStandardItem(sta)
+                item.setCheckable(True)
 
-            if len(sta_list) == 1:
-                item.setCheckState(QtCore.Qt.Checked)
+                if len(sta_list) == 1:
+                    item.setCheckState(QtCore.Qt.Checked)
 
-            self.sta_model.appendRow(item)
+                self.sta_model.appendRow(item)
 
         self.selui.StaListView.setModel(self.sta_model)
-        # connect to method to update stae of select all checkbox
+        # cnnect to method to update stae of select all checkbox
         self.selui.StaListView.clicked.connect(self.listviewCheckChanged)
 
         # -------- add channels to channel select items
@@ -680,7 +683,10 @@ class selectionDialog(QtGui.QDialog):
             i += 1
         if self.no_time:
             # Return Selected networks, stations and selected channels, tags
-            return (select_networks, select_stations, select_channels, select_tags)
+            if not self.gaps_analysis:
+                return (select_networks, select_stations, select_channels, select_tags)
+            elif self.gaps_analysis:
+                return (select_channels, select_tags)
         else:
             # Return Selected networks, stations and selected channels, tags and start and end times and
             # before quake and after quake extraction times(or defaults)
@@ -1236,12 +1242,14 @@ class Window(QtGui.QMainWindow):
         """
         Fill the station tree widget upon opening a new file.
         """
-        asdf_file = str(QtGui.QFileDialog.getOpenFileName(
-            parent=self, caption="Choose ASDF File",
-            directory=os.path.expanduser("~"),
-            filter="ASDF files (*.h5)"))
-        if not asdf_file:
-            return
+        # asdf_file = str(QtGui.QFileDialog.getOpenFileName(
+        #     parent=self, caption="Choose ASDF File",
+        #     directory=os.path.expanduser("~"),
+        #     filter="ASDF files (*.h5)"))
+        # if not asdf_file:
+        #     return
+
+        asdf_file = "/Users/ashbycooper/Desktop/Passive/_GA_ANUtest/XX/ASDF/XX.h5"
 
         asdf_filename = basename(asdf_file)
 
@@ -1464,7 +1472,32 @@ class Window(QtGui.QMainWindow):
                     self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
                                                    event_id=self.cat[self.cat_row_index_list[_i]])
 
-                    self.out_eq_asdf.add_stationxml(self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML)
+                    inv = self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML
+                    self.out_eq_asdf.add_stationxml(inv)
+
+                    # calculate the p-arrival time
+                    sta_coords = inv.get_coordinates(tr.get_id())
+
+                    dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
+                                                    sta_coords['longitude'],
+                                                    origin_info.latitude,
+                                                    origin_info.longitude)
+                    dist_deg = kilometer2degrees(dist / 1000.0)
+                    tt_model = TauPyModel(model='iasp91')
+                    arrivals = tt_model.get_travel_times(origin_info.depth / 1000.0, dist_deg, ('P'))
+
+                    # make parametric data such as expected earthquake arrival time and spce to pick arrivals
+                    # store in ASDF auxillary data
+
+                    data_type = "ArrivalData"
+                    data_path = event_id + "/" + tr.get_id().replace('.', '_')
+
+                    print(arrivals, arrivals[0])
+
+                    parameters = {"P": str(origin_info.time + arrivals[0].time),
+                                  "P_as": str(origin_info.time + arrivals[0].time - 60),
+                                  "distkm": dist / 1000.0,
+                                  "dist_deg": dist_deg}
 
                 # add the earthquake
                 self.out_eq_asdf.add_quakeml(self.cat[self.cat_row_index_list[_i]])
@@ -2354,7 +2387,6 @@ class Window(QtGui.QMainWindow):
             temp_tr = None
 
         try:
-            # TODO: Test if i need to do the final trim...
 
             if st.__nonzero__():
                 # Attempt to merge all traces with matching ID'S in place
@@ -2366,19 +2398,70 @@ class Window(QtGui.QMainWindow):
                 st.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
                 return st
             else:
-                msg = QtGui.QMessageBox()
-                msg.setIcon(QtGui.QMessageBox.Critical)
-                msg.setText("No Data for Requested Time Interval")
-                msg.setDetailedText("There are no waveforms to display for selected time interval:"
-                                    "\nStart Time = " + str(UTCDateTime(interval_tuple[0], precision=0)) +
-                                    "\nEnd Time =   " + str(UTCDateTime(interval_tuple[1], precision=0)))
-                msg.setWindowTitle("Extract Time Error")
-                msg.setStandardButtons(QtGui.QMessageBox.Ok)
-                msg.exec_()
                 return None
         except UnboundLocalError:
             # the station selection dialog box was cancelled
             return None
+
+    def output_event_asdf(self, event):
+        # Get quake origin info
+        origin_info = event.preferred_origin() or event.origins[0]
+        event_id = str(event.resource_id.id).split('=')[1]
+
+        for tr in self.st:
+
+            print(tr)
+            # The ASDF formatted waveform name [full_id, station_id, starttime, endtime, tag]
+            ASDF_tag = self.make_ASDF_tag(tr, "earthquake").encode('ascii')
+
+            # get the json dict entry for the original trace
+            temp_dict = self.db.retrieve_full_db_entry(tr.stats.asdf.orig_id)
+
+            # modify the start and end times of the trace ti be correct
+            temp_dict["tr_starttime"] = tr.stats.starttime.timestamp
+            temp_dict["tr_endtime"] = tr.stats.endtime.timestamp
+
+            self.keys_list.append(str(ASDF_tag))
+            self.info_list.append(temp_dict)
+
+            inv = self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML
+            self.out_eq_asdf.add_stationxml(inv)
+
+            # calculate the p-arrival time
+            sta_coords = inv.get_coordinates(tr.get_id())
+
+            dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
+                                            sta_coords['longitude'],
+                                            origin_info.latitude,
+                                            origin_info.longitude)
+            dist_deg = kilometer2degrees(dist / 1000.0)
+            tt_model = TauPyModel(model='iasp91')
+            arrivals = tt_model.get_travel_times(origin_info.depth / 1000.0, dist_deg, ('P'))
+
+            # make parametric data such as expected earthquake arrival time and spce to pick arrivals
+            # store in ASDF auxillary data
+
+            data_type = "ArrivalData"
+            data_path = event_id + "/" + tr.get_id().replace('.', '_')
+
+            print(arrivals[0])
+
+            parameters = {"P": str(origin_info.time + arrivals[0].time),
+                          "P_as": str(origin_info.time + arrivals[0].time - 60),
+                          "distkm": dist / 1000.0,
+                          "dist_deg": dist_deg}
+
+            # add the waveforms referenced to the earthquake
+            self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
+                                           event_id=event)
+            self.out_eq_asdf.add_auxiliary_data(data=np.array([0]),
+                                                data_type=data_type,
+                                                path=data_path,
+                                                parameters=parameters)
+            # print(tr.stats.network + "." + tr.stats.station)
+
+        # add the earthquake
+        self.out_eq_asdf.add_quakeml(event)
 
     def extract_waveform_frm_ASDF(self, override, **kwargs):
         # # Open a new st object
@@ -2438,6 +2521,7 @@ class Window(QtGui.QMainWindow):
                 self.st = self.query_to_stream(query, interval_tuple)
 
 
+
             else:
                 return
 
@@ -2447,76 +2531,13 @@ class Window(QtGui.QMainWindow):
             if file_output:
                 self.initiate_output_eq_asdf()
 
-                keys_list = []
-                info_list = []
-
                 event = self.cat[self.cat_row_index]
-                # Get quake origin info
-                origin_info = event.preferred_origin() or event.origins[0]
-                event_id = str(event.resource_id.id).split('=')[1]
+                self.keys_list = []
+                self.info_list = []
 
-                for tr in self.st:
+                self.output_event_asdf(event)
 
-
-                    # The ASDF formatted waveform name [full_id, station_id, starttime, endtime, tag]
-                    ASDF_tag = self.make_ASDF_tag(tr, "earthquake").encode('ascii')
-
-                    # get the json dict entry for the original trace
-                    temp_dict = self.db.retrieve_full_db_entry(tr.stats.asdf.orig_id)
-
-                    # modify the start and end times of the trace ti be correct
-                    temp_dict["tr_starttime"]=tr.stats.starttime.timestamp
-                    temp_dict["tr_endtime"]=tr.stats.endtime.timestamp
-
-                    keys_list.append(str(ASDF_tag))
-                    info_list.append(temp_dict)
-
-                    inv = self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML
-                    self.out_eq_asdf.add_stationxml(inv)
-
-                    # calculate the p-arrival time
-                    sta_coords = inv.get_coordinates(tr.get_id())
-
-                    dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
-                                                    sta_coords['longitude'],
-                                                    origin_info.latitude,
-                                                    origin_info.longitude)
-                    dist_deg = kilometer2degrees(dist / 1000.0)
-                    tt_model = TauPyModel(model='iasp91')
-                    arrivals = tt_model.get_travel_times(origin_info.depth / 1000.0, dist_deg, ('P'))
-
-                    # make parametric data such as expected earthquake arrival time and spce to pick arrivals
-                    # store in ASDF auxillary data
-
-                    data_type = "ArrivalData"
-                    data_path = event_id + "/" + tr.get_id().replace('.', '_')
-
-                    print(arrivals, arrivals[0])
-
-                    parameters = {"P": str(origin_info.time + arrivals[0].time),
-                                  "P_as": str(origin_info.time + arrivals[0].time - 60),
-                                  "distkm": dist/1000.0,
-                                  "dist_deg": dist_deg}
-
-
-
-
-
-
-                    # add the waveforms referenced to the earthquake
-                    self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
-                                                   event_id=self.cat[self.cat_row_index])
-                    self.out_eq_asdf.add_auxiliary_data(data=np.array([0]),
-                                                        data_type=data_type,
-                                                        path=data_path,
-                                                        parameters=parameters)
-                    # print(tr.stats.network + "." + tr.stats.station)
-
-
-                # add the earthquake
-                self.out_eq_asdf.add_quakeml(event)
-
-                big_dictionary = dict(zip(keys_list, info_list))
+                big_dictionary = dict(zip(self.keys_list, self.info_list))
 
                 with open(self.json_out, 'w') as fp:
                     json.dump(big_dictionary, fp)
@@ -2530,23 +2551,98 @@ class Window(QtGui.QMainWindow):
                 # close the dataset
                 del self.out_eq_asdf
 
+        else:
+            msg = QtGui.QMessageBox()
+            msg.setIcon(QtGui.QMessageBox.Critical)
+            msg.setText("No Data for Requested Time Interval")
+            msg.setDetailedText("There are no waveforms to display for selected time interval:"
+                                "\nStart Time = " + str(UTCDateTime(interval_tuple[0], precision=0)) +
+                                "\nEnd Time =   " + str(UTCDateTime(interval_tuple[1], precision=0)))
+            msg.setWindowTitle("Extract Time Error")
+            msg.setStandardButtons(QtGui.QMessageBox.Ok)
+            msg.exec_()
+
+    def xtract_multi_quakes(self):
+        """
+        Method to extract multiple earthquakes from the ASDF for multiple stations and can include reference stations
+        Then save all of that data into a new ASDF file
+        """
+        focus_widget = self.tbl_view_dict["cat"]
+        # get the selected row numbers
+        row_number_list = [x.row() for x in focus_widget.selectionModel().selectedRows()]
+        self.cat_row_index_list = [self.table_accessor[focus_widget][1][x] for x in row_number_list]
+
+        self.selected_row_list = [self.cat_df.loc[x] for x in self.cat_row_index_list]
+
+        net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
+        print(net_sta_list)
+
+        # get a list of unique networks and stations
+        net_list = list(set([x.split('.')[0] for x in net_sta_list]))
+        sta_list = [x.split('.')[1] for x in net_sta_list]
+
+        chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
+        tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
+
+        # open up dialog box to select stations/channels etc to extract earthquakes
+        sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
+                                  tags_list=tags_list, xquake=True)
+        if sel_dlg.exec_():
+            select_net, select_sta, select_chan, select_tags, st, et, file_output, ref_stn_out, \
+            bef_quake_xt, aft_quake_xt = sel_dlg.getSelected()
+
+            self.initiate_output_eq_asdf()
+            self.keys_list = []
+            self.info_list = []
+
+            for _i, sel_quake in enumerate(self.selected_row_list):
+                qtime = sel_quake['qtime']
+                event = self.cat[self.cat_row_index_list[_i]]
+
+                # we are looking at an earthquake, adjust the extraction time based on spin box values
+                interval_tuple = (qtime - bef_quake_xt, qtime + aft_quake_xt)
+                # do a query for data
+                query = self.db.queryByTime(select_net, select_sta, select_chan, select_tags, interval_tuple[0],
+                                            interval_tuple[1])
+                self.st = self.query_to_stream(query, interval_tuple)
+
+                if not self.st == None:
+
+                    self.output_event_asdf(event)
+
+                else:
+                    continue
+
+            big_dictionary = dict(zip(self.keys_list, self.info_list))
+
+            with open(self.json_out, 'w') as fp:
+                json.dump(big_dictionary, fp)
+
+            # close the dataset
+            del self.out_eq_asdf
+
     def analyse_earthquake(self, event_obj):
         # Get event catalogue
         self.event_cat = self.ds.events
 
+        event_id = str(event_obj.resource_id.id).split('=')[1]
+
         net_set = set()
+        sta_list = []
+        chan_set = set()
 
-        net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
+        # get a list of net_sta that have data for an event using what is stored in the auxillary data
+        event_net_sta_list = self.ds.auxiliary_data.ArrivalData[event_id].list()
+
         # create station list with just station names without network code
-        sta_list = [x.split('.')[1] for x in net_sta_list]
-
-        for x in net_sta_list:
-            sta_list.append(x.split('.')[1])
-            net_set.add(x.split('.')[0])
+        for x in event_net_sta_list:
+            sta_list.append(x.split('_')[1])
+            net_set.add(x.split('_')[0])
+            chan_set.add(x.split('_')[3])
 
         net_list = list(net_set)
+        chan_list = list(chan_set)
 
-        chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
         tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
 
 
@@ -2655,7 +2751,7 @@ class Window(QtGui.QMainWindow):
     def station_availability(self):
 
         # go through JSON entries and find all gaps save them into dictionary
-        self.recording_gaps = {}
+        # self.recording_gaps = {}
         self.recording_intervals = {}
         # self.recording_overlaps = {}
 
@@ -2667,151 +2763,236 @@ class Window(QtGui.QMainWindow):
 
         net_sta_list = self.ds.waveforms.list()
 
-        tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
-
         # make list with station codes and network codes seperated
         net_list = list(set([x.split('.')[0] for x in net_sta_list]))
         sta_list = [x.split('.')[1] for x in net_sta_list]
-
-        # iterate through stations
-        for _i, station in enumerate(net_sta_list):
-            stnxml = self.ds.waveforms[station].StationXML
-            # get the start recording interval
-            #  and get the end recording interval
-            try:
-                rec_start = UTCDateTime(stnxml[0][0].start_date).timestamp or \
-                            UTCDateTime(stnxml[0][0].creation_date).timestamp
-                rec_end = UTCDateTime(stnxml[0][0].end_date).timestamp or \
-                          UTCDateTime(stnxml[0][0].termination_date).timestamp
-            except AttributeError:
-                print("No start/end dates found in XML")
-                break
-
-            if station == "7D.CZ40":
-                print("rec_start:", UTCDateTime(rec_start))
-                print("rec_end:", UTCDateTime(rec_end))
-
-            # get the channels for that station
-            xml_list = stnxml.select(channel="*Z").get_contents()['channels']
-
-            sta = str(xml_list[0]).split('.')[1]
-            chan = str(xml_list[0]).split('.')[3]
-
-            # # the auxillary data hierarchy
-            # data_type = "StationAvailability"
-            # gaps_path = station.replace('.', '_') + '/DataGaps'
-            # # ovlps_path = station.replace('.', '_') + '/DataOverlaps'
-            # rec_int_path = station.replace('.', '_') + '/RecordingIntervals'
-            #
-            # # check if there is already info in auxillary data
-            # try:
-            #     aux_gaps = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["DataGaps"].data
-            #     aux_rec_ints = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["RecordingIntervals"].data
-            # except KeyError:
-            #     # no gaps/interval info stored in auxillary data
-            #     pass
-            # else:
-            #     print("Gaps and recording interval information already in "
-            #           "ASDF Auxillary Data for Station: %s ....." % station)
-            #     self.recording_intervals[station] = aux_rec_ints
-            #     self.recording_gaps[station] = aux_gaps
-            #
-            #     continue
-
-            print("\r Working on Station: " + station + ", " + str(_i + 1) + " of " + \
-                  str(len(net_sta_list)) + " Stations", )
-            sys.stdout.flush()
-
-            gaps_array = self.db.get_recording_intervals(sta=sta, chan=chan)
-
-            # if station == "7D.CZ40":
-            #     print("GAPS:")
-            #     for _i in range(len(gaps_array)):
-            #
-            #         print(UTCDateTime(gaps_array[_i, 0]), UTCDateTime(gaps_array[_i, 1]))
-
-            self.recording_gaps[station] = gaps_array
-
-            temp_start_int = []
-            temp_end_int = []
-
-            gaps_no = gaps_array.shape[1]
-
-            prev_endtime = ''
-
-            if gaps_no == 0:
-                temp_start_int.append(rec_start)
-                temp_end_int.append(rec_end)
-            else:
-                # populate the recording intervals dictionary
-                for _j in range(gaps_no):
-                    gap_start = gaps_array[0, _j]
-                    gap_end = gaps_array[1, _j]
-
-                    if _j == 0:
-                        # first interval
-                        # print(UTCDateTime(rec_start).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
-                        temp_start_int.append(rec_start)
-                        temp_end_int.append(gap_start)
-                        prev_endtime = gap_end
-
-                    if _j == gaps_no - 1:
-                        # last interval
-                        # print(UTCDateTime(gap_entry['gap_end']).ctime(), UTCDateTime(rec_end).ctime())
-                        temp_start_int.append(gap_end)
-                        temp_end_int.append(rec_end)
-
-                    elif not _j == 0 and not _j == gaps_no - 1:
-                        # print(UTCDateTime(gaps_list[_j-1]['gap_end']).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
-                        temp_start_int.append(prev_endtime)
-                        temp_end_int.append(gap_start)
-                        prev_endtime = gap_end
-
-            # the [1] element of shape is the number of intervals
-            rec_int_array = np.array([temp_start_int, temp_end_int])
-            self.recording_intervals[station] = rec_int_array
-
-            #
-            # if station == "7D.CZ40":
-            #     print("Intervals")
-            #     for _i in range(rec_int_array.shape[1]):
-            #         print(UTCDateTime(rec_int_array[0, _i]), UTCDateTime(rec_int_array[1, _i]))
+        chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
+        tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
 
 
+        # open up the selection dialog for the user to select which data to display availability info
+        # Launch the custom station/component selection dialog
+        sel_dlg = selectionDialog(parent=self, chan_list=chan_list,
+                                  tags_list=tags_list, gaps_analysis=True)
+        if sel_dlg.exec_():
+            # there will only be one chan and one tag selected
+            select_chan, select_tags = sel_dlg.getSelected()
 
-            # # add the gaps into the auxillary data
-            # self.ds.add_auxiliary_data(data_type=data_type, path=gaps_path, data=gaps_array,
-            #                            parameters={"Description": "2D Numpy array with "
-            #                                                       "UTCDateTime Timestamps for the start/end "
-            #                                                       "of a gap interval"})
-            # self.ds.add_auxiliary_data(data_type=data_type, path=rec_int_path, data=rec_int_array,
-            #                            parameters={"Description": "2D Numpy array with "
-            #                                                       "UTCDateTime Timestamps for the start/end "
-            #                                                       "of a recording interval"})
+            # now calculate recording intervals and gaps for all stations
+            for _i, net_sta in enumerate(net_sta_list):
+                stnxml = self.ds.waveforms[net_sta].StationXML
+                # get the start recording interval
+                #  and get the end recording interval
+                try:
+                    rec_start = UTCDateTime(stnxml[0][0].start_date).timestamp or \
+                                UTCDateTime(stnxml[0][0].creation_date).timestamp
+                    rec_end = UTCDateTime(stnxml[0][0].end_date).timestamp or \
+                              UTCDateTime(stnxml[0][0].termination_date).timestamp
+                except AttributeError:
+                    print("No start/end dates found in XML")
+                    break
 
-        print("")
-        print("\nFinished calculating station recording intervals")
-        # print("Wrote data into ASDF auxillary information" )
+                print("\r Working on Station: " + net_sta + ", " + str(_i + 1) + " of " + \
+                              str(len(net_sta_list)) + " Stations", )
+                sys.stdout.flush()
 
-        # self.build_auxillary_tree_view()
-        # print(self.recording_intervals)
+                gaps_array = self.db.get_recording_intervals(net=net_sta.split('.')[0],sta = net_sta.split('.')[1], chan = select_chan, tags=select_tags)
 
-        # print("running data avail")
+                self.recording_gaps[net_sta] = gaps_array
 
+                temp_start_int = []
+                temp_end_int = []
 
-        # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
-        if hasattr(self, "cat_df"):
+                gaps_no = gaps_array.shape[1]
 
-            self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
-                                             chan_list=[chan], tags_list=tags_list,
-                                             rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
-        else:
-            self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
-                                             chan_list=[chan], tags_list=tags_list,
-                                             rec_int_dict=self.recording_intervals)
+                prev_endtime = ''
 
-        # connect to the go button in plot
-        self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
+                if gaps_no == 0:
+                    temp_start_int.append(rec_start)
+                    temp_end_int.append(rec_end)
+                else:
+                    # populate the recording intervals dictionary
+                    for _j in range(gaps_no):
+                        gap_start = gaps_array[0, _j]
+                        gap_end = gaps_array[1, _j]
+
+                        if _j == 0:
+                            # first interval
+                            # print(UTCDateTime(rec_start).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
+                            temp_start_int.append(rec_start)
+                            temp_end_int.append(gap_start)
+                            prev_endtime = gap_end
+
+                        if _j == gaps_no - 1:
+                            # last interval
+                            # print(UTCDateTime(gap_entry['gap_end']).ctime(), UTCDateTime(rec_end).ctime())
+                            temp_start_int.append(gap_end)
+                            temp_end_int.append(rec_end)
+
+                        elif not _j == 0 and not _j == gaps_no - 1:
+                            # print(UTCDateTime(gaps_list[_j-1]['gap_end']).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
+                            temp_start_int.append(prev_endtime)
+                            temp_end_int.append(gap_start)
+                            prev_endtime = gap_end
+
+                # the [1] element of shape is the number of intervals
+                rec_int_array = np.array([temp_start_int, temp_end_int])
+                self.recording_intervals[net_sta] = rec_int_array
+
+                # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
+                if hasattr(self, "cat_df"):
+
+                    self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+                                                     chan_list=select_chan, tags_list=tags_list,
+                                                     rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
+                else:
+                    self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+                                                     chan_list=select_chan, tags_list=tags_list,
+                                                     rec_int_dict=self.recording_intervals)
+
+                # connect to the go button in plot
+                self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
+
+        #
+        # # iterate through stations
+        # for _i, net_sta in enumerate(net_sta_list):
+        #     # stnxml = self.ds.waveforms[station].StationXML
+        #     # # get the start recording interval
+        #     # #  and get the end recording interval
+        #     # try:
+        #     #     rec_start = UTCDateTime(stnxml[0][0].start_date).timestamp or \
+        #     #                 UTCDateTime(stnxml[0][0].creation_date).timestamp
+        #     #     rec_end = UTCDateTime(stnxml[0][0].end_date).timestamp or \
+        #     #               UTCDateTime(stnxml[0][0].termination_date).timestamp
+        #     # except AttributeError:
+        #     #     print("No start/end dates found in XML")
+        #     #     break
+        #
+        #     # if station == "7D.CZ40":
+        #     #     print("rec_start:", UTCDateTime(rec_start))
+        #     #     print("rec_end:", UTCDateTime(rec_end))
+        #
+        #     # get the channels for that station
+        #     # xml_list = stnxml.select(channel="*Z").get_contents()['channels']
+        #
+        #     # sta = str(xml_list[0]).split('.')[1]
+        #     # chan = str(xml_list[0]).split('.')[3]
+        #
+        #     # # the auxillary data hierarchy
+        #     # data_type = "StationAvailability"
+        #     # gaps_path = station.replace('.', '_') + '/DataGaps'
+        #     # # ovlps_path = station.replace('.', '_') + '/DataOverlaps'
+        #     # rec_int_path = station.replace('.', '_') + '/RecordingIntervals'
+        #     #
+        #     # # check if there is already info in auxillary data
+        #     # try:
+        #     #     aux_gaps = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["DataGaps"].data
+        #     #     aux_rec_ints = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["RecordingIntervals"].data
+        #     # except KeyError:
+        #     #     # no gaps/interval info stored in auxillary data
+        #     #     pass
+        #     # else:
+        #     #     print("Gaps and recording interval information already in "
+        #     #           "ASDF Auxillary Data for Station: %s ....." % station)
+        #     #     self.recording_intervals[station] = aux_rec_ints
+        #     #     self.recording_gaps[station] = aux_gaps
+        #     #
+        #     #     continue
+        #
+        #     print("\r Working on Station: " + net_sta+ ", " + str(_i + 1) + " of " + \
+        #           str(len(net_sta_list)) + " Stations", )
+        #     sys.stdout.flush()
+        #
+        #     gaps_array = self.db.get_recording_intervals(net=net_sta.splitsta=net_sta.split('.')[1], chan=chan)
+        #
+        #     # if station == "7D.CZ40":
+        #     #     print("GAPS:")
+        #     #     for _i in range(len(gaps_array)):
+        #     #
+        #     #         print(UTCDateTime(gaps_array[_i, 0]), UTCDateTime(gaps_array[_i, 1]))
+        #
+        #     self.recording_gaps[station] = gaps_array
+        #
+        #     temp_start_int = []
+        #     temp_end_int = []
+        #
+        #     gaps_no = gaps_array.shape[1]
+        #
+        #     prev_endtime = ''
+        #
+        #     if gaps_no == 0:
+        #         temp_start_int.append(rec_start)
+        #         temp_end_int.append(rec_end)
+        #     else:
+        #         # populate the recording intervals dictionary
+        #         for _j in range(gaps_no):
+        #             gap_start = gaps_array[0, _j]
+        #             gap_end = gaps_array[1, _j]
+        #
+        #             if _j == 0:
+        #                 # first interval
+        #                 # print(UTCDateTime(rec_start).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
+        #                 temp_start_int.append(rec_start)
+        #                 temp_end_int.append(gap_start)
+        #                 prev_endtime = gap_end
+        #
+        #             if _j == gaps_no - 1:
+        #                 # last interval
+        #                 # print(UTCDateTime(gap_entry['gap_end']).ctime(), UTCDateTime(rec_end).ctime())
+        #                 temp_start_int.append(gap_end)
+        #                 temp_end_int.append(rec_end)
+        #
+        #             elif not _j == 0 and not _j == gaps_no - 1:
+        #                 # print(UTCDateTime(gaps_list[_j-1]['gap_end']).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
+        #                 temp_start_int.append(prev_endtime)
+        #                 temp_end_int.append(gap_start)
+        #                 prev_endtime = gap_end
+        #
+        #     # the [1] element of shape is the number of intervals
+        #     rec_int_array = np.array([temp_start_int, temp_end_int])
+        #     self.recording_intervals[station] = rec_int_array
+        #
+        #     #
+        #     # if station == "7D.CZ40":
+        #     #     print("Intervals")
+        #     #     for _i in range(rec_int_array.shape[1]):
+        #     #         print(UTCDateTime(rec_int_array[0, _i]), UTCDateTime(rec_int_array[1, _i]))
+        #
+        #
+        #
+        #     # # add the gaps into the auxillary data
+        #     # self.ds.add_auxiliary_data(data_type=data_type, path=gaps_path, data=gaps_array,
+        #     #                            parameters={"Description": "2D Numpy array with "
+        #     #                                                       "UTCDateTime Timestamps for the start/end "
+        #     #                                                       "of a gap interval"})
+        #     # self.ds.add_auxiliary_data(data_type=data_type, path=rec_int_path, data=rec_int_array,
+        #     #                            parameters={"Description": "2D Numpy array with "
+        #     #                                                       "UTCDateTime Timestamps for the start/end "
+        #     #                                                       "of a recording interval"})
+        #
+        # print("")
+        # print("\nFinished calculating station recording intervals")
+        # # print("Wrote data into ASDF auxillary information" )
+        #
+        # # self.build_auxillary_tree_view()
+        # # print(self.recording_intervals)
+        #
+        # # print("running data avail")
+        #
+        #
+        # # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
+        # if hasattr(self, "cat_df"):
+        #
+        #     self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+        #                                      chan_list=[chan], tags_list=tags_list,
+        #                                      rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
+        # else:
+        #     self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+        #                                      chan_list=[chan], tags_list=tags_list,
+        #                                      rec_int_dict=self.recording_intervals)
+        #
+        # # connect to the go button in plot
+        # self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
 
     def intervals_selected(self):
         ret = self.data_avail_plot.get_roi_data()
@@ -3051,7 +3232,8 @@ def launch():
 
 
 if __name__ == "__main__":
-    proxy_queary = query_yes_no("Input Proxy Settings?")
+    # proxy_queary = query_yes_no("Input Proxy Settings?")
+    proxy_queary="no"
 
     if proxy_queary == 'yes':
         print('')

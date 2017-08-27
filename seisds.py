@@ -126,7 +126,7 @@ class SeisDB(object):
                 if ((matched_entry['tr_starttime'] <= qs < matched_entry['tr_endtime'])
                     or (qs <= matched_entry['tr_starttime'] and matched_entry['tr_starttime'] < qe)) \
                         and ((matched_entry['new_network'] in net) and (matched_entry['new_station'] in sta) and (
-                            matched_entry['new_channel'] in chan)):
+                                    matched_entry['new_channel'] in chan)):
                     indices.append(_i)
             # indices_array = np.array(indices)
             # Print output
@@ -157,11 +157,12 @@ class SeisDB(object):
                         "new_network": self._indexed_np_array['net'][k]}
                     for k in _indexed_np_array_masked[0]}
 
-    def get_recording_intervals(self, sta, chan):
+    def get_recording_intervals(self, net, sta, chan, tags):
 
         # print(self._indexed_np_array)
-        _indexed_np_array_masked = np.where((np.in1d(self._indexed_np_array['sta'], sta))
-                                            & (np.in1d(self._indexed_np_array['cha'], chan)))
+        _indexed_np_array_masked = np.where(
+            (np.in1d(self._indexed_np_array['net'], net)) & (np.in1d(self._indexed_np_array['sta'], sta)) & (
+            np.in1d(self._indexed_np_array['cha'], chan)) & (np.in1d(self._indexed_np_array['tag'], tags)))
         # print(_indexed_np_array_masked)
 
         _masked_np_array = self._indexed_np_array[_indexed_np_array_masked]
@@ -205,7 +206,6 @@ class SeisDB(object):
 
         return (np.array([gaps_start_list, gaps_end_list]))
 
-
     def get_unique_information(self):
         """
         Method to retreive the unique channels and tags within an ASDF file from the JSON Database
@@ -226,9 +226,8 @@ class SeisDB(object):
         """
 
         # for
-        print(self._json_dict[json_key])
-        return(self._json_dict[json_key])
-
+        # print(self._json_dict[json_key])
+        return (self._json_dict[json_key])
 
 
 if __name__ == "__main__":
