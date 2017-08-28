@@ -32,6 +32,7 @@ import math
 import inspect
 import importlib
 import json
+import random
 
 from distutils.util import strtobool
 
@@ -891,6 +892,8 @@ class Window(QtGui.QMainWindow):
         self.ui = Ui_MainWindow()  # NOQA
         self.ui.setupUi(self)
 
+        self.__connect_signal_and_slots()
+
         self.provenance_list_model = QtGui.QStandardItemModel(
             self.ui.provenance_list_view)
         self.ui.provenance_list_view.setModel(self.provenance_list_model)
@@ -916,11 +919,6 @@ class Window(QtGui.QMainWindow):
         # set up dictionary for different ASDF files and associated attributes/items
         self.ASDF_accessor = {}
 
-        self.ui.openASDF.triggered.connect(self.open_asdf_file)
-        # self.ui.openJSON_DB.triggered.connect(self.open_json_file)
-        self.ui.openEQ_QuakeML.triggered.connect(self.open_EQ_cat)
-        self.ui.actionStation_Availability.triggered.connect(self.station_availability)
-
         # add in icon for reset waveform view button
         self.ui.reset_view_push_button.setIcon(QtGui.QIcon('eLsS8.png'))
 
@@ -934,14 +932,14 @@ class Window(QtGui.QMainWindow):
         self.ui.normalize_check_box.setEnabled(False)
         self.ui.waveform_filter_check_box.setEnabled(False)
 
-        self.ui.plot_single_stn_button.released.connect(self.plot_single_stn_selected)
-        self.ui.gather_events_checkbox.stateChanged.connect(self.gather_events_checkbox_selected)
-        self.ui.analyse_p_pushButton.released.connect(self.analyse_p_time)
 
+        # disable buttons in the p-time-analysis tab
         self.ui.sort_drop_down_button_2.setEnabled(False)
         self.ui.plot_single_stn_button.setEnabled(False)
         self.ui.gather_events_checkbox.setEnabled(False)
 
+
+        # color bar for p-time analysis
         self.ui.col_grad_w.loadPreset('spectrum')
         self.ui.col_grad_w.setEnabled(False)
         self.ui.col_grad_w.setToolTip("""
@@ -951,21 +949,16 @@ class Window(QtGui.QMainWindow):
                                 - Right click a triangle to remove
                                 """)
 
+        # reset button for p-time analysis
         self.ui.pick_reset_view_button.setIcon(QtGui.QIcon('eLsS8.png'))
         self.ui.pick_reset_view_button.released.connect(self.reset_plot_view)
         self.ui.pick_reset_view_button.setToolTip("Reset the scatter plot zoom and sort method")
 
+        # use a custom multiplot class to create waveform plotting region (allows scrollbar and minimum height of plots)
         self.waveform_graph = MyMultiPlotWidget()
 
         self.ui.graph_stackedWidget.addWidget(self.waveform_graph)
         self.ui.graph_stackedWidget.setCurrentWidget(self.waveform_graph)
-
-        # self.ui.waveform_filter_settings_toolButton.setEnabled(False)
-
-        # self.ui.actionXCOR.triggered.connect(self.get_xcor_data)
-        # self.ui.actionFilter.triggered.connect(self.bpfilter)
-        # self.bpfilter_selected = False
-        self.ui.waveform_filter_settings_toolButton.released.connect(self.waveform_filter_settings)
 
         # Add right clickability to station view
         self.ui.station_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -1006,6 +999,19 @@ class Window(QtGui.QMainWindow):
         Connect special signals and slots not covered by the named signals and
         slots from pyuic4.
         """
+        # QMenu items connect slots
+        self.ui.openASDF.triggered.connect(self.open_asdf_file)
+        self.ui.openEQ_QuakeML.triggered.connect(self.open_EQ_cat)
+        self.ui.actionStation_Availability.triggered.connect(self.station_availability)
+
+        # Buttons on p-time Analysis tab
+        self.ui.plot_single_stn_button.released.connect(self.plot_single_stn_selected)
+        self.ui.gather_events_checkbox.stateChanged.connect(self.gather_events_checkbox_changed)
+        self.ui.analyse_p_pushButton.released.connect(self.analyse_p_time)
+
+        # waveform options button
+        self.ui.waveform_filter_settings_toolButton.released.connect(self.waveform_filter_settings)
+
         self.ui.station_view.itemEntered.connect(
             self.on_station_view_itemEntered)
         self.ui.station_view.itemExited.connect(
@@ -1389,7 +1395,7 @@ class Window(QtGui.QMainWindow):
         print('------------')
         print(self.cat_df)
 
-        self.build_tables()
+        self.build_EQ_extract_table()
 
 
         # TODO: add extract earthquake functionality similar to QC_events_ASDF GUI
@@ -1455,7 +1461,7 @@ class Window(QtGui.QMainWindow):
         print(self.st)
         self.update_waveform_plot()
 
-    def build_tables(self):
+    def build_EQ_extract_table(self):
 
         self.table_accessor = None
 
@@ -1474,7 +1480,7 @@ class Window(QtGui.QMainWindow):
         self.tbld.tbldui.EQ_xtract_tableView.customContextMenuRequested.connect(self.tbl_view_popup)
 
         #extract all or selected earthquakes
-        self.tbld.tbldui.xtract_selected_pushButton.released.connect(self.xtract_multi_quakes)
+        self.tbld.tbldui.xtract_selected_pushButton.released.connect(self.extract_multi_quakes)
 
         # Lookup Dictionary for table views
         self.tbl_view_dict = {"cat": self.tbld.tbldui.EQ_xtract_tableView}
@@ -1487,112 +1493,6 @@ class Window(QtGui.QMainWindow):
         # If headers are clicked then sort
         # self.tbld.cat_event_table_view.horizontalHeader().sectionClicked.connect(self.headerClicked)
 
-    def xtract_multi_quakes(self):
-        """
-        Method to extract multiple earthquakes from the ASDF for multiple stations and can include reference stations
-        Then save all of that data into a new ASDF file
-        """
-        focus_widget = self.tbl_view_dict["cat"]
-        # get the selected row numbers
-        row_number_list = [x.row() for x in focus_widget.selectionModel().selectedRows()]
-        self.cat_row_index_list = [self.table_accessor[focus_widget][1][x] for x in row_number_list]
-
-        self.selected_row_list = [self.cat_df.loc[x] for x in self.cat_row_index_list]
-
-        net_sta_list = self.ASDF_accessor[self.ds_id]['sta_list']
-        print(net_sta_list)
-
-        # get a list of unique networks and stations
-        net_list = list(set([x.split('.')[0] for x in net_sta_list]))
-        sta_list = [x.split('.')[1] for x in net_sta_list]
-
-        chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
-        tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
-
-        # open up dialog box to select stations/channels etc to extract earthquakes
-        sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
-                                  tags_list=tags_list, xquake=True)
-        if sel_dlg.exec_():
-            select_net, select_sta, select_chan, select_tags, st, et, file_output, ref_stn_out, \
-            bef_quake_xt, aft_quake_xt = sel_dlg.getSelected()
-
-            self.initiate_output_eq_asdf()
-            keys_list = []
-            info_list = []
-
-            for _i, sel_quake in enumerate(self.selected_row_list):
-                qtime = sel_quake['qtime']
-                print(sel_quake)
-                self.cat_row_index_list[_i]
-                print(self.cat[self.cat_row_index_list[_i]])
-
-
-
-                # we are looking at an earthquake, adjust the extraction time based on spin box values
-                interval_tuple = (qtime - bef_quake_xt, qtime + aft_quake_xt)
-                # do a query for data
-                query = self.db.queryByTime(select_net, select_sta, select_chan, select_tags, interval_tuple[0],
-                                            interval_tuple[1])
-                self.st = self.query_to_stream(query, interval_tuple)
-
-                print(self.st)
-
-                for tr in self.st:
-                    # The ASDF formatted waveform name [full_id, station_id, starttime, endtime, tag]
-                    ASDF_tag = self.make_ASDF_tag(tr, "earthquake").encode('ascii')
-
-                    # get the json dict entry for the original trace
-                    temp_dict = self.db.retrieve_full_db_entry(tr.stats.asdf.orig_id)
-
-                    # modify the start and end times of the trace ti be correct
-                    temp_dict["tr_starttime"] = tr.stats.starttime.timestamp
-                    temp_dict["tr_endtime"] = tr.stats.endtime.timestamp
-
-                    keys_list.append(str(ASDF_tag))
-                    info_list.append(temp_dict)
-
-                    # add the waveforms referenced to the earthquake
-                    self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
-                                                   event_id=self.cat[self.cat_row_index_list[_i]])
-
-                    inv = self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML
-                    self.out_eq_asdf.add_stationxml(inv)
-
-                    # calculate the p-arrival time
-                    sta_coords = inv.get_coordinates(tr.get_id())
-
-                    dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
-                                                    sta_coords['longitude'],
-                                                    origin_info.latitude,
-                                                    origin_info.longitude)
-                    dist_deg = kilometer2degrees(dist / 1000.0)
-                    tt_model = TauPyModel(model='iasp91')
-                    arrivals = tt_model.get_travel_times(origin_info.depth / 1000.0, dist_deg, ('P'))
-
-                    # make parametric data such as expected earthquake arrival time and spce to pick arrivals
-                    # store in ASDF auxillary data
-
-                    data_type = "ArrivalData"
-                    data_path = event_id + "/" + tr.get_id().replace('.', '_')
-
-                    print(arrivals, arrivals[0])
-
-                    parameters = {"P": str(origin_info.time + arrivals[0].time),
-                                  "P_as": str(origin_info.time + arrivals[0].time - 60),
-                                  "distkm": dist / 1000.0,
-                                  "dist_deg": dist_deg}
-
-                # add the earthquake
-                self.out_eq_asdf.add_quakeml(self.cat[self.cat_row_index_list[_i]])
-
-            big_dictionary = dict(zip(keys_list, info_list))
-
-            with open(self.json_out, 'w') as fp:
-                json.dump(big_dictionary, fp)
-
-            # close the dataset
-            del self.out_eq_asdf
-
     def on_detrend_and_demean_check_box_stateChanged(self, state):
         self.update_waveform_plot()
 
@@ -1602,9 +1502,6 @@ class Window(QtGui.QMainWindow):
     def on_group_by_network_check_box_stateChanged(self, state):
         self.build_station_view_list()
 
-    def on_waveform_filter_check_box_stateChanged(self, state):
-        self.update_waveform_plot()
-
     def waveform_filter_settings(self):
         # open the filter dialog window to set filter settings
         fil_dlg = FilterDialog(parent=self)
@@ -1613,10 +1510,12 @@ class Window(QtGui.QMainWindow):
 
             print(self.filter_settings)
 
-
             # if the filter box is checked then once the filter settings are set update the waveform plot with filter applied
             if self.ui.waveform_filter_check_box.isChecked():
                 self.update_waveform_plot()
+
+    def on_waveform_filter_check_box_stateChanged(self, state):
+        self.update_waveform_plot()
 
     def on_graph_itemClicked(self, event):
         if event.button() == 4:
@@ -1632,6 +1531,10 @@ class Window(QtGui.QMainWindow):
                 mousePoint = vb.mapSceneToView(pos)
                 vLine.setPos(mousePoint.x())
 
+    def gather_events_checkbox_changed(self):
+        print("gather events toggled")
+        self.sort_method_selected(self.ui.sort_drop_down_button_2, ('no_sort', 'no_sort'), False)
+
     def sort_method_selected(self, sort_pushButton, value, prev_view):
         """
         # Method to plot information on the scatter plot and to provide sort functionality
@@ -1640,63 +1543,179 @@ class Window(QtGui.QMainWindow):
 
         print("sort method selected")
 
-        # if prev_view:
-        #     try:
-        #         self.saved_state = self.plot.getViewBox().getState()
-        #     except AttributeError:
-        #         # Plot does not exist, i.e. it is the first time trying to call update_graph
-        #         self.saved_state = None
-        # elif not prev_view:
-        #     self.saved_state = None
-        # # if no sort:
-        # if value[1] == "no_sort":
-        #     sort_meth = None
-        #     sort_pushButton.setText("Sort")
-        #     unique_stations = self.picks_df['sta'].unique()
-        #
-        #     stn_list = unique_stations.tolist()
-        #     stn_list.sort()
-        #
-        #     self.axis_station_list = stn_list
-        # # if sort by station:
-        # elif value[1] == 0:
-        #     sort_pushButton.setText(value[0])
-        #     sort_meth = "station"
-        #     self.axis_station_list = np.sort(self.picks_df['sta'].unique())  # numpy array
-        # # if sort by gcarc
-        # elif value[1] == 1:
-        #     sort_pushButton.setText("Sorted by GCARC: " + value[0])
-        #     sort_meth = 'gcarc'
-        #     self.axis_station_list = self.spatial_dict[value[0]].sort_values(by='gcarc')['station'].tolist()
-        # # if sort by azimuth
-        # elif value[1] == 2:
-        #     sort_pushButton.setText("Sorted by AZ: " + value[0])
-        #     sort_meth = 'az'
-        #     self.axis_station_list = self.spatial_dict[value[0]].sort_values(by='az')['station'].tolist()
-        # # if sort by ep dist
-        # elif value[1] == 3:
-        #     sort_pushButton.setText("Sorted by Ep Dist: " + value[0])
-        #     sort_meth = 'ep_dist'
-        #     self.axis_station_list = self.spatial_dict[value[0]].sort_values(by='ep_dist')['station'].tolist()
-        #
-        # # use sort method unless it is None (i.e. No sort)
-        # if sort_meth:
-        #     self.axis_station_list = self.spatial_dict[value[0]].sort_values(by=sort_meth)['station'].tolist()
-        #
-        #     #sort the waveform if it exists
-        #     try:
-        #         self.waveform_st.sort(keys=[sort_meth])
-        #     except AttributeError:
-        #         # stream does not exist
-        #         pass
-        #
-        # # self.update_waveform_plot()
+        # Method to plot information on the scatter plot and to provide sort functionality
+        # All calls to update the plot area should pass through here rather than calling update_plot
+        if prev_view:
+            try:
+                self.saved_state = self.plot.getViewBox().getState()
+            except AttributeError:
+                # Plot does not exist, i.e. it is the first time trying to call update_graph
+                self.saved_state = None
+        elif not prev_view:
+            self.saved_state = None
+        # if no sort:
+        if value[1] == "no_sort":
+            sort_meth = None
+            sort_pushButton.setText("Sort")
+            unique_stations = self.picks_df['sta'].unique()
+
+            stn_list = unique_stations.tolist()
+            stn_list.sort()
+
+            self.axis_station_list = stn_list
+        # if sort by station:
+        elif value[1] == 0:
+            sort_pushButton.setText(value[0])
+            sort_meth = "station"
+            self.axis_station_list = np.sort(self.picks_df['sta'].unique())  # numpy array
+        # if sort by gcarc
+        elif value[1] == 1:
+            sort_pushButton.setText("Sorted by GCARC: " + value[0])
+            sort_meth = 'gcarc'
+            self.axis_station_list = self.spatial_dict[value[0]].sort_values(by='gcarc')['station'].tolist()
+        # if sort by azimuth
+        elif value[1] == 2:
+            sort_pushButton.setText("Sorted by AZ: " + value[0])
+            sort_meth = 'az'
+            self.axis_station_list = self.spatial_dict[value[0]].sort_values(by='az')['station'].tolist()
+        # if sort by ep dist
+        elif value[1] == 3:
+            sort_pushButton.setText("Sorted by Ep Dist: " + value[0])
+            sort_meth = 'ep_dist'
+            self.axis_station_list = self.spatial_dict[value[0]].sort_values(by='ep_dist')['station'].tolist()
+
+        # use sort method unless it is None (i.e. No sort)
+        if sort_meth:
+            self.axis_station_list = self.spatial_dict[value[0]].sort_values(by=sort_meth)['station'].tolist()
+
+            # sort the waveform if it exists
+            try:
+                self.st.sort(keys=[sort_meth])
+            except AttributeError:
+                # stream does not exist
+                pass
+
+        # self.update_waveform_plot()
+        self.update_p_time_graph()
 
     def on_reset_view_push_button_released(self):
         """
         Method to reset the waveform plot to initial
         """
-        self.sort_method_selected(self.ui.sort_drop_down_button, ('no_sort', 'no_sort'), False)
+        self.sort_method_selected(self.ui.sort_drop_down_button_2, ('no_sort', 'no_sort'), False)
+
+    def reset_view(self):
+        self._state["waveform_plots"][0].setXRange(
+            self._state["waveform_plots_min_time"].timestamp,
+            self._state["waveform_plots_max_time"].timestamp)
+        min_v = self._state["waveform_plots_min_value"]
+        max_v = self._state["waveform_plots_max_value"]
+
+        y_range = max_v - min_v
+        min_v -= 0.1 * y_range
+        max_v += 0.1 * y_range
+        self._state["waveform_plots"][0].setYRange(min_v, max_v)
+
+    def update_p_time_graph(self):
+        # List of colors for individual scatter points based on the arr time residual
+        col_list = self.picks_df['col_val'].apply(lambda x: self.ui.col_grad_w.getColor(x)).tolist()
+
+        self.ui.p_graph_view.clear()
+
+        # generate unique stationID integers
+        # unique_stations = self.picks_df['sta'].unique()
+        enum_sta = list(enumerate(self.axis_station_list))
+
+        # rearrange dict
+        sta_id_dict = dict([(b, a) for a, b in enum_sta])
+
+        def get_sta_id(x):
+            return (sta_id_dict[x['sta']])
+
+        # add column with sta_id to picks df
+        self.picks_df['sta_id'] = self.picks_df.apply(get_sta_id, axis=1)
+
+        y_axis_string = pg.AxisItem(orientation='left')
+        y_axis_string.setTicks([enum_sta])
+
+        if not self.ui.gather_events_checkbox.isChecked():
+
+            # Set up the plotting area
+            self.plot = self.ui.p_graph_view.addPlot(0, 0, title="Time Difference: P Theoretical - P Picked (crosses)",
+                                                  axisItems={'bottom': DateAxisItem(orientation='bottom',
+                                                                                    utcOffset=0),
+                                                             'left': y_axis_string})
+            self.plot.setMouseEnabled(x=True, y=False)
+
+            # # When Mouse is moved over plot print the data coordinates
+            # self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
+
+            # Re-establish previous map_view_station if it exists
+            if self.saved_state:
+                self.plot.getViewBox().setState(self.saved_state)
+
+            # Plot Error bar showing P and Pas arrivals
+            diff_frm_mid = (self.picks_df['tt_diff'].abs() / 2).tolist()
+            err = pg.ErrorBarItem(x=self.picks_df['time_mid'], y=self.picks_df['sta_id'], left=diff_frm_mid,
+                                  right=diff_frm_mid, beam=0.05)
+
+            self.plot.addItem(err)
+
+            # Plot extra scatter points showing P_as picked (crosses)
+            p_as_scatter_plot = pg.ScatterPlotItem(pxMode=True)
+            p_as_scatter_plot.addPoints(self.picks_df['P_as_pick_time_UTC'],
+                                        self.picks_df['sta_id'], symbol="+", size=10,
+                                        brush=col_list)
+            self.plot.addItem(p_as_scatter_plot)
+
+            # Plot midway scatter points between time diff
+            self.time_diff_scatter_plot = pg.ScatterPlotItem(pxMode=True)
+            self.lastClicked = []
+            # self.time_diff_scatter_plot.sigClicked.connect(self.scatter_point_clicked)
+            self.time_diff_scatter_plot.addPoints(self.picks_df['time_mid'],
+                                                  self.picks_df['sta_id'], size=9,
+                                                  brush=col_list)
+            self.plot.addItem(self.time_diff_scatter_plot)
+
+        elif self.ui.gather_events_checkbox.isChecked():
+
+            rearr_midpoint_dict = [(b, a) for a, b in self.midpoint_dict.iteritems()]
+
+            x_axis_string = pg.AxisItem(orientation='bottom')
+            x_axis_string.setTicks([rearr_midpoint_dict])
+
+            # Set up the plotting area
+            self.plot = self.p_graph_view.addPlot(0, 0, title="Time Difference: P Theoretical - P Picked (crosses)",
+                                                  axisItems={'left': y_axis_string, 'bottom': x_axis_string})
+            self.plot.setMouseEnabled(x=True, y=False)
+            self.plot.setLabel('bottom', "Event ID")
+
+            # Re-establish previous view if it exists
+            if self.saved_state:
+                self.plot.getViewBox().setState(self.saved_state)
+
+            # Plot Error bar showing P and Pas arrivals
+            diff_frm_mid = (self.picks_df['tt_diff'].abs() / 2).tolist()
+            err = pg.ErrorBarItem(x=self.picks_df['alt_midpoints'], y=self.picks_df['sta_id'], left=diff_frm_mid,
+                                  right=diff_frm_mid, beam=0.05)
+
+            self.plot.addItem(err)
+
+            # Plot extra scatter points showing P picked (crosses)
+            p_as_scatter_plot = pg.ScatterPlotItem(pxMode=True)
+            p_as_scatter_plot.addPoints(self.picks_df['alt_p_as'],
+                                        self.picks_df['sta_id'], symbol="+", size=10,
+                                        brush=col_list)
+            self.plot.addItem(p_as_scatter_plot)
+
+            # Plot midway scatter points between time diff
+            self.time_diff_scatter_plot = pg.ScatterPlotItem(pxMode=True)
+            self.lastClicked = []
+            self.time_diff_scatter_plot.sigClicked.connect(self.scatter_point_clicked)
+            self.time_diff_scatter_plot.addPoints(self.picks_df['alt_midpoints'],
+                                                  self.picks_df['sta_id'], size=9,
+                                                  brush=col_list)
+            self.plot.addItem(self.time_diff_scatter_plot)
 
     def update_waveform_plot(self):
         # TODO: add ability to decouple an axis
@@ -1705,7 +1724,6 @@ class Window(QtGui.QMainWindow):
         self.ui.reset_view_push_button.setEnabled(True)
         self.ui.previous_interval_push_button.setEnabled(True)
         self.ui.next_interval_push_button.setEnabled(True)
-        self.ui.sort_drop_down_button.setEnabled(True)
         self.ui.references_push_button.setEnabled(True)
         self.ui.normalize_check_box.setEnabled(True)
         self.ui.detrend_and_demean_check_box.setEnabled(True)
@@ -1866,18 +1884,6 @@ class Window(QtGui.QMainWindow):
         # Get start and end time of data in view
         starttime = UTCDateTime(self._state["waveform_plots_min_time"])
         endtime = UTCDateTime(self._state["waveform_plots_max_time"])
-
-    def reset_view(self):
-        self._state["waveform_plots"][0].setXRange(
-            self._state["waveform_plots_min_time"].timestamp,
-            self._state["waveform_plots_max_time"].timestamp)
-        min_v = self._state["waveform_plots_min_value"]
-        max_v = self._state["waveform_plots_max_value"]
-
-        y_range = max_v - min_v
-        min_v -= 0.1 * y_range
-        max_v += 0.1 * y_range
-        self._state["waveform_plots"][0].setYRange(min_v, max_v)
 
     def show_provenance_document(self, document_name):
         doc = self.ds.provenance[document_name]
@@ -2139,6 +2145,51 @@ class Window(QtGui.QMainWindow):
             self.net_item_menu.addAction(select_action)
             self.net_item_menu.exec_(self.ui.station_view.viewport().mapToGlobal(position))
 
+    def on_station_view_itemEntered(self, item):
+        # TODO: fix station highlighting on hover
+        # TODO: fix station popup label on map
+        t = item.type()
+
+        def get_station(item, parent=True):
+            if parent:
+                station = str(item.parent().text(0))
+                if "." not in station:
+                    station = item.parent().parent().text(0) + "." + station
+            else:
+                station = item.text(0)
+                if "." not in station:
+                    station = item.parent().text(0) + "." + station
+            return station
+
+        if t == STATION_VIEW_ITEM_TYPES["FILE"]:
+            pass
+        elif t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
+            network = item.text(0)
+            js_call = "highlightNetwork('{network}')".format(network=network)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+        elif t == STATION_VIEW_ITEM_TYPES["STATION"]:
+            station = get_station(item, parent=False)
+            js_call = "highlightStation('{station}')".format(station=station)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+        elif t == STATION_VIEW_ITEM_TYPES["CHANNEL"]:
+            station = get_station(item)
+            js_call = "highlightStation('{station}')".format(station=station)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+        elif t == STATION_VIEW_ITEM_TYPES["CHAN_INFO"]:
+            station = get_station(item)
+            js_call = "highlightStation('{station}')".format(station=station)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+        elif t == STATION_VIEW_ITEM_TYPES["STN_INFO"]:
+            station = get_station(item)
+            js_call = "highlightStation('{station}')".format(station=station)
+            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+        else:
+            pass
+
+    def on_station_view_itemExited(self, *args):
+        js_call = "setAllInactive()"
+        self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
+
     def on_event_tree_widget_itemClicked(self, item, column):
         t = item.type()
         if t not in EVENT_VIEW_ITEM_TYPES.values():
@@ -2354,51 +2405,6 @@ class Window(QtGui.QMainWindow):
 
         self.show_provenance_document(data)
 
-    def on_station_view_itemEntered(self, item):
-        # TODO: fix station highlighting on hover
-        # TODO: fix station popup label on map
-        t = item.type()
-
-        def get_station(item, parent=True):
-            if parent:
-                station = str(item.parent().text(0))
-                if "." not in station:
-                    station = item.parent().parent().text(0) + "." + station
-            else:
-                station = item.text(0)
-                if "." not in station:
-                    station = item.parent().text(0) + "." + station
-            return station
-
-        if t == STATION_VIEW_ITEM_TYPES["FILE"]:
-            pass
-        elif t == STATION_VIEW_ITEM_TYPES["NETWORK"]:
-            network = item.text(0)
-            js_call = "highlightNetwork('{network}')".format(network=network)
-            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-        elif t == STATION_VIEW_ITEM_TYPES["STATION"]:
-            station = get_station(item, parent=False)
-            js_call = "highlightStation('{station}')".format(station=station)
-            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-        elif t == STATION_VIEW_ITEM_TYPES["CHANNEL"]:
-            station = get_station(item)
-            js_call = "highlightStation('{station}')".format(station=station)
-            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-        elif t == STATION_VIEW_ITEM_TYPES["CHAN_INFO"]:
-            station = get_station(item)
-            js_call = "highlightStation('{station}')".format(station=station)
-            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-        elif t == STATION_VIEW_ITEM_TYPES["STN_INFO"]:
-            station = get_station(item)
-            js_call = "highlightStation('{station}')".format(station=station)
-            self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-        else:
-            pass
-
-    def on_station_view_itemExited(self, *args):
-        js_call = "setAllInactive()"
-        self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-
     def trace_explorer(self, sta_accessor):
         """
         Method to look at traces for a selected station in a table view
@@ -2487,66 +2493,6 @@ class Window(QtGui.QMainWindow):
         except UnboundLocalError:
             # the station selection dialog box was cancelled
             return None
-
-    def output_event_asdf(self, event):
-        # Get quake origin info
-        origin_info = event.preferred_origin() or event.origins[0]
-        event_id = str(event.resource_id.id).split('=')[1]
-
-        for tr in self.st:
-
-            print(tr)
-            # The ASDF formatted waveform name [full_id, station_id, starttime, endtime, tag]
-            ASDF_tag = self.make_ASDF_tag(tr, "earthquake").encode('ascii')
-
-            # get the json dict entry for the original trace
-            temp_dict = self.db.retrieve_full_db_entry(tr.stats.asdf.orig_id)
-
-            # modify the start and end times of the trace ti be correct
-            temp_dict["tr_starttime"] = tr.stats.starttime.timestamp
-            temp_dict["tr_endtime"] = tr.stats.endtime.timestamp
-
-            self.keys_list.append(str(ASDF_tag))
-            self.info_list.append(temp_dict)
-
-            inv = self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML
-            self.out_eq_asdf.add_stationxml(inv)
-
-            # calculate the p-arrival time
-            sta_coords = inv.get_coordinates(tr.get_id())
-
-            dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
-                                            sta_coords['longitude'],
-                                            origin_info.latitude,
-                                            origin_info.longitude)
-            dist_deg = kilometer2degrees(dist / 1000.0)
-            tt_model = TauPyModel(model='iasp91')
-            arrivals = tt_model.get_travel_times(origin_info.depth / 1000.0, dist_deg, ('P'))
-
-            # make parametric data such as expected earthquake arrival time and spce to pick arrivals
-            # store in ASDF auxillary data
-
-            data_type = "ArrivalData"
-            data_path = event_id + "/" + tr.get_id().replace('.', '_')
-
-            print(arrivals[0])
-
-            parameters = {"P": str(origin_info.time + arrivals[0].time),
-                          "P_as": str(origin_info.time + arrivals[0].time - 60),
-                          "distkm": dist / 1000.0,
-                          "dist_deg": dist_deg}
-
-            # add the waveforms referenced to the earthquake
-            self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
-                                           event_id=event)
-            self.out_eq_asdf.add_auxiliary_data(data=np.array([0]),
-                                                data_type=data_type,
-                                                path=data_path,
-                                                parameters=parameters)
-            # print(tr.stats.network + "." + tr.stats.station)
-
-        # add the earthquake
-        self.out_eq_asdf.add_quakeml(event)
 
     def extract_waveform_frm_ASDF(self, override, **kwargs):
         # # Open a new st object
@@ -2647,7 +2593,7 @@ class Window(QtGui.QMainWindow):
             msg.setStandardButtons(QtGui.QMessageBox.Ok)
             msg.exec_()
 
-    def xtract_multi_quakes(self):
+    def extract_multi_quakes(self):
         """
         Method to extract multiple earthquakes from the ASDF for multiple stations and can include reference stations
         Then save all of that data into a new ASDF file
@@ -2833,6 +2779,65 @@ class Window(QtGui.QMainWindow):
         # create the asdf file
         self.out_eq_asdf = pyasdf.ASDFDataSet(self.out_eq_filname)
 
+    def output_event_asdf(self, event):
+        # Get quake origin info
+        origin_info = event.preferred_origin() or event.origins[0]
+        event_id = str(event.resource_id.id).split('=')[1]
+
+        for tr in self.st:
+            print(tr)
+            # The ASDF formatted waveform name [full_id, station_id, starttime, endtime, tag]
+            ASDF_tag = self.make_ASDF_tag(tr, "earthquake").encode('ascii')
+
+            # get the json dict entry for the original trace
+            temp_dict = self.db.retrieve_full_db_entry(tr.stats.asdf.orig_id)
+
+            # modify the start and end times of the trace ti be correct
+            temp_dict["tr_starttime"] = tr.stats.starttime.timestamp
+            temp_dict["tr_endtime"] = tr.stats.endtime.timestamp
+
+            self.keys_list.append(str(ASDF_tag))
+            self.info_list.append(temp_dict)
+
+            inv = self.ds.waveforms[tr.stats.network + "." + tr.stats.station].StationXML
+            self.out_eq_asdf.add_stationxml(inv)
+
+            # calculate the p-arrival time
+            sta_coords = inv.get_coordinates(tr.get_id())
+
+            dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
+                                            sta_coords['longitude'],
+                                            origin_info.latitude,
+                                            origin_info.longitude)
+            dist_deg = kilometer2degrees(dist / 1000.0)
+            tt_model = TauPyModel(model='iasp91')
+            arrivals = tt_model.get_travel_times(origin_info.depth / 1000.0, dist_deg, ('P'))
+
+            # make parametric data such as expected earthquake arrival time and spce to pick arrivals
+            # store in ASDF auxillary data
+
+            data_type = "ArrivalData"
+            data_path = event_id + "/" + tr.get_id().replace('.', '_')
+
+            print(arrivals[0])
+
+            parameters = {"P": str(origin_info.time + arrivals[0].time),
+                          "P_as": str(origin_info.time + arrivals[0].time + random.randint(-30, 30)),
+                          "distkm": dist / 1000.0,
+                          "dist_deg": dist_deg}
+
+            # add the waveforms referenced to the earthquake
+            self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
+                                           event_id=event)
+            self.out_eq_asdf.add_auxiliary_data(data=np.array([0]),
+                                                data_type=data_type,
+                                                path=data_path,
+                                                parameters=parameters)
+            # print(tr.stats.network + "." + tr.stats.station)
+
+        # add the earthquake
+        self.out_eq_asdf.add_quakeml(event)
+
     def station_availability(self):
 
         # go through JSON entries and find all gaps save them into dictionary
@@ -2885,7 +2890,7 @@ class Window(QtGui.QMainWindow):
                                                  rec_int_dict=self.recording_intervals)
 
             # connect to the go button in plot
-            self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
+            self.data_avail_plot.davailui.go_push_button.released.connect(self.plot_intervals_selected)
 
 
             # # now calculate recording intervals and gaps for all stations
@@ -3104,7 +3109,7 @@ class Window(QtGui.QMainWindow):
         # # connect to the go button in plot
         # self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
 
-    def intervals_selected(self):
+    def plot_intervals_selected(self):
         ret = self.data_avail_plot.get_roi_data()
 
         if ret[0] == "view_region":
@@ -3332,7 +3337,7 @@ class Window(QtGui.QMainWindow):
         Method to analyse differnece between expected arrival time and actual arrival time for P arrivals
         :return:
         """
-
+        self.ui.sort_drop_down_button.setEnabled(True)
         self.ui.sort_drop_down_button_2.setEnabled(True)
         self.ui.plot_single_stn_button.setEnabled(True)
         self.ui.gather_events_checkbox.setEnabled(True)
@@ -3353,51 +3358,89 @@ class Window(QtGui.QMainWindow):
         # go throuugh events
         for _i, event_id in enumerate(p_time_aux_events_list):
             print(event_id)
+            #open new empty data fram for pick times for event
+            temp_df = pd.DataFrame(data=None, columns=["pick_event_id", "sta", "P_pick_time", "P_as_pick_time"])
 
             # get the stations list
             p_time_stations_list = self.ds.auxiliary_data.ArrivalData[event_id].list()
 
             print(p_time_stations_list)
 
-            for tr_id in p_time_stations_list:
+            for _j, tr_id in enumerate(p_time_stations_list):
                 p_time = self.ds.auxiliary_data.ArrivalData[event_id][tr_id].parameters["P"]
                 p_as_time = self.ds.auxiliary_data.ArrivalData[event_id][tr_id].parameters["P_as"]
 
                 print(p_time, p_as_time)
+                temp_df.loc[_j] = [event_id, tr_id, p_time, p_as_time]
 
+            dict_query = event_id in self.event_df_dict
 
-        # # iterate through selected files
-        # for _i, pick_file in enumerate(pick_filenames):
-        #     pick_file = str(pick_file)
-        #     event_id = os.path.basename(pick_file).split('_')[0]
-        #
-        #     # read pick file into dataframe
-        #     df = pd.read_table(pick_file, sep=' ', header=None, names=['sta', 'phase', 'date', 'hrmin', 'sec'],
-        #                        usecols=[0, 4, 6, 7, 8], dtype=str)
-        #
-        #     df = df.drop(df[df['phase'] == 'To'].index)
-        #
-        #     df[df['phase'].iloc[0] + '_pick_time'] = df['date'].astype(str) + 'T' + df['hrmin'].astype(str) \
-        #                                              + df['sec'].astype(str)
-        #     df['pick_event_id'] = event_id
-        #
-        #     df = df.drop(['phase', 'date', 'hrmin', 'sec'], axis=1)
-        #
-        #     dict_query = event_id in self.event_df_dict
-        #
-        #     if not dict_query:
-        #         # save the df to the dictionary
-        #         self.event_df_dict[event_id] = df
-        #
-        #     elif dict_query:
-        #         # merge the dataframes for same events
-        #         new_df = pd.merge(self.event_df_dict.get(event_id), df, how='outer', on=['sta', 'pick_event_id'])
-        #         self.event_df_dict[event_id] = new_df
-        #
-        # # now concat all dfs
-        # self.picks_df = pd.concat(self.event_df_dict.values())
+            if not dict_query:
+                # save the df to the dictionary
+                self.event_df_dict[event_id] = temp_df
 
+            elif dict_query:
+                # merge the dataframes for same events
+                new_df = pd.merge(self.event_df_dict.get(event_id), temp_df, how='outer', on=['sta', 'pick_event_id'])
+                self.event_df_dict[event_id] = new_df
 
+        # now concat all dfs
+        self.picks_df = pd.concat(self.event_df_dict.values())
+
+        print("+++++++++++")
+        print(self.picks_df)
+
+        def calc_diff(x):
+            if x['P_pick_time'] == np.nan or x['P_as_pick_time'] == np.nan:
+                return (np.nan)
+
+            P_UTC = UTCDateTime(x['P_pick_time']).timestamp
+            P_as_UTC = UTCDateTime(x['P_as_pick_time']).timestamp
+
+            time_diff = P_UTC - P_as_UTC
+
+            # check if time diff is outside of desired bounds
+            # if so then append Nan so they are removed
+            if self.res_limits:
+                if not self.res_limits[0] <= time_diff <= self.res_limits[1]:
+                    return (pd.Series([np.nan, np.nan, np.nan]))
+
+            return (pd.Series([P_UTC, P_as_UTC, time_diff]))
+
+        # calculate diff between theoretical and observed tt, change P_pick_time and P_as_pick_time to
+        # UTCDateTime stamps
+        # The function called by apply will return a dataframe
+        self.picks_df[['P_pick_time_UTC', 'P_as_pick_time_UTC', 'tt_diff']] = \
+            self.picks_df.apply(calc_diff, axis=1)  # passes series object row-wise to function
+
+        self.picks_df.reset_index(drop=True, inplace=True)
+        self.picks_df = self.picks_df.drop(['P_pick_time', 'P_as_pick_time'], axis=1)
+        # drop any rows that have Nan in the P_as column (i.e. there is no pick for it - probably means
+        # data is to noisy to pick)
+        self.picks_df.dropna(subset=['P_as_pick_time_UTC'], inplace=True)
+        self.picks_df.reset_index(drop=True, inplace=True)
+
+        # Now normalize the tt_diff column to get colors
+        max_val = self.picks_df['tt_diff'].max()
+        min_val = self.picks_df['tt_diff'].min()
+
+        self.picks_df['col_val'] = (self.picks_df['tt_diff'] - min_val) / (max_val - min_val)
+
+        self.picks_df['time_mid'] = (self.picks_df['P_pick_time_UTC'] - 0.5 * self.picks_df['tt_diff'])
+
+        print('--------')
+        print(self.picks_df)
+
+        self.ui.col_grad_w.setEnabled(True)
+        col_change = functools.partial(self.sort_method_selected, self.ui.sort_drop_down_button_2, ('no_sort', 'no_sort'),
+                                       True)
+        self.ui.col_grad_w.sigGradientChanged.connect(col_change)
+
+        # update min/max labels
+        self.ui.max_lb.setText(str("%.2f" % max_val))
+        self.ui.min_lb.setText(str("%.2f" % min_val))
+
+        self.sort_method_selected(self.ui.sort_drop_down_button_2, ('no_sort', 'no_sort'), False)
 
 def launch():
     # Automatically compile all ui files if they have been changed.
