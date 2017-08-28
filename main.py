@@ -937,8 +937,8 @@ class Window(QtGui.QMainWindow):
 
         self.waveform_graph = MyMultiPlotWidget()
 
-        self.ui.placeholder_layout.takeAt(0)
-        self.ui.placeholder_layout.addWidget(self.waveform_graph)
+        self.ui.graph_stackedWidget.addWidget(self.waveform_graph)
+        self.ui.graph_stackedWidget.setCurrentWidget(self.waveform_graph)
 
         # self.ui.waveform_filter_settings_toolButton.setEnabled(False)
 
@@ -1755,6 +1755,8 @@ class Window(QtGui.QMainWindow):
             plot.addItem(vLine, ignoreBounds=True)
 
             plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
+
+        self.waveform_graph.setNumberPlots(len(temp_st))
 
         self._state["waveform_plots_min_time"] = min(starttimes)
         self._state["waveform_plots_max_time"] = max(endtimes)
