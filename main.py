@@ -3333,7 +3333,7 @@ class Window(QtGui.QMainWindow):
         :return:
         """
 
-        self.ui.sort_drop_down_button2.setEnabled(True)
+        self.ui.sort_drop_down_button_2.setEnabled(True)
         self.ui.plot_single_stn_button.setEnabled(True)
         self.ui.gather_events_checkbox.setEnabled(True)
 
@@ -3360,8 +3360,8 @@ class Window(QtGui.QMainWindow):
             print(p_time_stations_list)
 
             for tr_id in p_time_stations_list:
-                p_time = self.ds.auxiliary_data.ArrivalData[event_id][tr_id]["P"]
-                p_as_time = self.ds.auxiliary_data.ArrivalData[event_id][tr_id]["P_as"]
+                p_time = self.ds.auxiliary_data.ArrivalData[event_id][tr_id].parameters["P"]
+                p_as_time = self.ds.auxiliary_data.ArrivalData[event_id][tr_id].parameters["P_as"]
 
                 print(p_time, p_as_time)
 
