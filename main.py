@@ -74,6 +74,7 @@ extract_time_dialog_ui = "extract_time_dialog.ui"
 eq_extraction_dialog_ui = "eq_extraction_dialog.ui"
 data_avail_dialog_ui = "data_avail_dialog.ui"
 filter_dialog = "filter_dialog.ui"
+residual_set_limit_ui = "residual_set_limit.ui"
 
 Ui_MainWindow, QtBaseClass = uic.loadUiType(asdf_sextant_window_ui)
 Ui_SelectDialog, QtBaseClass = uic.loadUiType(select_stacomp_dialog_ui)
@@ -81,6 +82,7 @@ Ui_ExtractTimeDialog, QtBaseClass = uic.loadUiType(extract_time_dialog_ui)
 Ui_EqExtractionDialog, QtBaseClass = uic.loadUiType(eq_extraction_dialog_ui)
 Ui_DataAvailDialog, QtBaseClass = uic.loadUiType(data_avail_dialog_ui)
 Ui_FilterDialog, QtBaseClass = uic.loadUiType(filter_dialog)
+Ui_ResDialog, QtBaseClass = uic.loadUiType(residual_set_limit_ui)
 
 # Enums only exists in Python 3 and we don't really need them here...
 STATION_VIEW_ITEM_TYPES = {
@@ -865,6 +867,23 @@ class FilterDialog(QtGui.QDialog):
         return [str(self.filter_sel), dict(zip(params, ret_args))]
 
 
+class ResidualSetLimit(QtGui.QDialog):
+    """
+        Class to select a time residual limit
+    """
+
+    def __init__(self, parent=None):
+        super(ResidualSetLimit, self).__init__(parent)
+        self.resui = Ui_ResDialog()
+        self.resui.setupUi(self)
+
+    def getValues(self):
+        ll_sec = float(self.resui.LL_min.value()) * 60 + float(self.resui.LL_sec.value())
+        ul_sec = float(self.resui.UL_min.value()) * 60 + float(self.resui.UL_sec.value())
+
+        return (ll_sec, ul_sec)
+
+
 class Window(QtGui.QMainWindow):
     def __init__(self):
         QtGui.QMainWindow.__init__(self)
@@ -917,8 +936,9 @@ class Window(QtGui.QMainWindow):
 
         self.ui.plot_single_stn_button.released.connect(self.plot_single_stn_selected)
         self.ui.gather_events_checkbox.stateChanged.connect(self.gather_events_checkbox_selected)
+        self.ui.analyse_p_pushButton.released.connect(self.analyse_p_time)
 
-        self.ui.sort_drop_down_button.setEnabled(False)
+        self.ui.sort_drop_down_button_2.setEnabled(False)
         self.ui.plot_single_stn_button.setEnabled(False)
         self.ui.gather_events_checkbox.setEnabled(False)
 
@@ -2765,9 +2785,9 @@ class Window(QtGui.QMainWindow):
 
                 self.update_waveform_plot()
 
-    # function to create the ASDF waveform ID tag
     def make_ASDF_tag(self, tr, tag):
-        # def make_ASDF_tag(ri, tag):
+        # function to create the ASDF waveform ID tag
+        #  def make_ASDF_tag(ri, tag):
         data_name = "{net}.{sta}.{loc}.{cha}__{start}__{end}__{tag}".format(
             net=tr.stats.network,
             sta=tr.stats.station,
@@ -3306,6 +3326,77 @@ class Window(QtGui.QMainWindow):
 
     def reset_plot_view(self):
         pass
+
+    def analyse_p_time(self):
+        """
+        Method to analyse differnece between expected arrival time and actual arrival time for P arrivals
+        :return:
+        """
+
+        self.ui.sort_drop_down_button2.setEnabled(True)
+        self.ui.plot_single_stn_button.setEnabled(True)
+        self.ui.gather_events_checkbox.setEnabled(True)
+
+        # open up dialog to set limits for p-picked - p-theoretical time residual
+        res_dlg = ResidualSetLimit(parent=self)
+        if res_dlg.exec_():
+            self.res_limits = res_dlg.getValues()
+        else:
+            self.res_limits = None
+
+        # dictionary to contain pandas merged array for each event
+        self.event_df_dict = {}
+
+        # open up the auxillary data
+        p_time_aux_events_list = self.ds.auxiliary_data.ArrivalData.list()
+
+        # go throuugh events
+        for _i, event_id in enumerate(p_time_aux_events_list):
+            print(event_id)
+
+            # get the stations list
+            p_time_stations_list = self.ds.auxiliary_data.ArrivalData[event_id].list()
+
+            print(p_time_stations_list)
+
+            for tr_id in p_time_stations_list:
+                p_time = self.ds.auxiliary_data.ArrivalData[event_id][tr_id]["P"]
+                p_as_time = self.ds.auxiliary_data.ArrivalData[event_id][tr_id]["P_as"]
+
+                print(p_time, p_as_time)
+
+
+        # # iterate through selected files
+        # for _i, pick_file in enumerate(pick_filenames):
+        #     pick_file = str(pick_file)
+        #     event_id = os.path.basename(pick_file).split('_')[0]
+        #
+        #     # read pick file into dataframe
+        #     df = pd.read_table(pick_file, sep=' ', header=None, names=['sta', 'phase', 'date', 'hrmin', 'sec'],
+        #                        usecols=[0, 4, 6, 7, 8], dtype=str)
+        #
+        #     df = df.drop(df[df['phase'] == 'To'].index)
+        #
+        #     df[df['phase'].iloc[0] + '_pick_time'] = df['date'].astype(str) + 'T' + df['hrmin'].astype(str) \
+        #                                              + df['sec'].astype(str)
+        #     df['pick_event_id'] = event_id
+        #
+        #     df = df.drop(['phase', 'date', 'hrmin', 'sec'], axis=1)
+        #
+        #     dict_query = event_id in self.event_df_dict
+        #
+        #     if not dict_query:
+        #         # save the df to the dictionary
+        #         self.event_df_dict[event_id] = df
+        #
+        #     elif dict_query:
+        #         # merge the dataframes for same events
+        #         new_df = pd.merge(self.event_df_dict.get(event_id), df, how='outer', on=['sta', 'pick_event_id'])
+        #         self.event_df_dict[event_id] = new_df
+        #
+        # # now concat all dfs
+        # self.picks_df = pd.concat(self.event_df_dict.values())
+
 
 
 def launch():

@@ -427,6 +427,13 @@
             <item>
              <layout class="QHBoxLayout" name="buttons_hbox">
               <item>
+               <widget class="QPushButton" name="analyse_p_pushButton">
+                <property name="text">
+                 <string>Analyse</string>
+                </property>
+               </widget>
+              </item>
+              <item>
                <widget class="QPushButton" name="sort_drop_down_button_2">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
