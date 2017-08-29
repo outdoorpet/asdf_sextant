@@ -33,7 +33,7 @@
     <item row="0" column="0">
      <widget class="QTabWidget" name="central_tab">
       <property name="currentIndex">
-       <number>0</number>
+       <number>4</number>
       </property>
       <widget class="QWidget" name="waveform_tab">
        <attribute name="title">
@@ -682,7 +682,6 @@
     </property>
     <addaction name="actionFilter"/>
     <addaction name="actionStation_Availability"/>
-    <addaction name="actionTest_tool"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
