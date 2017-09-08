@@ -2097,6 +2097,47 @@ class Window(QtGui.QMainWindow):
         max_v += 0.1 * y_range
         self._state["waveform_plots"][0].setYRange(min_v, max_v)
 
+    def waveform_plot_interact(self, plot_args):
+        # Method to catch when waveform plot is interacted with and will return the
+        # interacted with plot (i.e. station) and will also resize the Arrival time vertical lines
+
+        temp_st = self.st.copy()
+
+        plot = plot_args[0]
+        tr_index = plot_args[1]
+
+        p_line = self._state["p_lines"][tr_index]
+        p_as_line = self._state["p_as_lines"][tr_index]
+        p_text = self._state["p_text"][tr_index]
+        p_as_text = self._state["p_as_text"][tr_index]
+
+        if not (p_line == None or p_as_line == None):
+            # get the corresponding trace
+            tr = temp_st[tr_index]
+
+            axY = plot.getAxis('left')
+
+            p_as_line.setData(np.array([tr.stats.p_as_arr, tr.stats.p_as_arr]),
+                                   np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
+                                             axY.range[1] - 0.05 * (axY.range[1] - axY.range[0])]),
+                                   pen=pg.mkPen({'color': '#ff8000', 'width': 1}))
+            p_line.setData(np.array([tr.stats.p_arr, tr.stats.p_arr]),
+                                np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
+                                          axY.range[1] - 0.05 * (axY.range[1] - axY.range[0])]),
+                                pen=pg.mkPen({'color': '#40ff00', 'width': 1}))
+
+            p_as_text.setPos(tr.stats.p_as_arr, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
+            p_text.setPos(tr.stats.p_arr, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
+
+    def dispMousePos(self, pos):
+        # Display current mouse coords if over the scatter plot area as a tooltip
+        try:
+            x_coord = UTCDateTime(self.plot.vb.mapSceneToView(pos).toPoint().x()).ctime()
+            time_tool = self.plot.setToolTip(x_coord)
+            pass
+        except:
+            pass
+
     def update_p_time_graph(self):
         # List of colors for individual scatter points based on the arr time residual
         col_list = self.picks_df['col_val'].apply(lambda x: self.ui.col_grad_w.getColor(x)).tolist()
@@ -2252,28 +2293,67 @@ class Window(QtGui.QMainWindow):
         self._state["waveform_plots"] = []
         self._state["station_id"] = []
         self._state["station_tag"] = []
+        self._state["p_lines"] = []
+        self._state["p_as_lines"] = []
+        self._state["p_text"] = []
+        self._state["p_as_text"] = []
+
         for _i, tr in enumerate(temp_st):
-            plot = self.waveform_graph.addPlot(
+            self.plot = self.waveform_graph.addPlot(
                 _i, 0, title=tr.id,
                 axisItems={'bottom': DateAxisItem(orientation='bottom',
                                                   utcOffset=0)})
-            plot.show()
-            self._state["waveform_plots"].append(plot)
+            self.plot.show()
+            self._state["waveform_plots"].append(self.plot)
             self._state["station_id"].append(tr.stats.network + '.' +
                                              tr.stats.station + '.' +
                                              tr.stats.location + '.' +
                                              tr.stats.channel)
             self._state["station_tag"].append(str(tr.stats.asdf.tag))
-            plot.plot(tr.times() + tr.stats.starttime.timestamp, tr.data)
+            self.plot.plot(tr.times() + tr.stats.starttime.timestamp, tr.data)
             starttimes.append(tr.stats.starttime)
             endtimes.append(tr.stats.endtime)
             min_values.append(tr.data.min())
             max_values.append(tr.data.max())
 
-            vLine = pg.InfiniteLine(angle=90, movable=True)
-            plot.addItem(vLine, ignoreBounds=True)
+            # When Mouse is moved over plot print the data coordinates
+            self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
 
-            plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
+            if tr.stats.p_arr == 0 or tr.stats.p_as_arr == 0:
+                # no picks for station and earthquake
+                p_as_line = None
+                p_line = None
+
+                p_as_text = None
+                p_text = None
+
+            else:
+
+                # plot vertical lines for P theroetical and P-picked arrival
+                p_as_line = pg.PlotCurveItem()
+                p_line = pg.PlotCurveItem()
+
+                self.plot.addItem(p_as_line)
+                self.plot.addItem(p_line)
+
+                # text for P and P-as arrivals
+                p_as_text = pg.TextItem("P_as", anchor=(1, 1), color='#ff8000')
+                p_text = pg.TextItem("P", anchor=(1, 1), color='#40ff00')
+
+                self.plot.addItem(p_as_text)
+                self.plot.addItem(p_text)
+
+            self._state["p_lines"].append(p_line)
+            self._state["p_as_lines"].append(p_as_line)
+
+            self._state["p_text"].append(p_text)
+            self._state["p_as_text"].append(p_as_text)
+
+
+            vLine = pg.InfiniteLine(angle=90, movable=True)
+            self.plot.addItem(vLine, ignoreBounds=True)
+
+            self.plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
 
         self.waveform_graph.setNumberPlots(len(temp_st))
 
@@ -2290,6 +2370,14 @@ class Window(QtGui.QMainWindow):
         for plot in self._state["waveform_plots"][1:]:
             plot.setXLink(self._state["waveform_plots"][0])
             plot.setYLink(self._state["waveform_plots"][0])
+
+        for _i, plot in enumerate(self._state["waveform_plots"]):
+            plot.hideAxis("bottom")
+            # connect with the method to catch when waveform plot is intercated with
+            plot.sigRangeChanged.connect(functools.partial(self.waveform_plot_interact, (self.plot, _i)))
+            self.waveform_plot_interact((plot, _i))
+
+        self._state["waveform_plots"][-1].showAxis("bottom")
 
         self.reset_view()
 
@@ -3147,10 +3235,12 @@ class Window(QtGui.QMainWindow):
         # Get event catalogue
         self.event_cat = self.ds.events
 
+        print(event_obj)
+
         event_id = str(event_obj.resource_id.id).split('=')[1]
 
         net_set = set()
-        sta_list = []
+        sta_set = set()
         chan_set = set()
 
         # get a list of net_sta that have data for an event using what is stored in the auxillary data
@@ -3158,11 +3248,12 @@ class Window(QtGui.QMainWindow):
 
         # create station list with just station names without network code
         for x in event_net_sta_list:
-            sta_list.append(x.split('_')[1])
+            sta_set.add(x.split('_')[1])
             net_set.add(x.split('_')[0])
             chan_set.add(x.split('_')[3])
 
         net_list = list(net_set)
+        sta_list = list(sta_set)
         chan_list = list(chan_set)
 
         tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
@@ -3186,7 +3277,6 @@ class Window(QtGui.QMainWindow):
                         continue
                     self.st += station[filtered_id]
 
-            print(self.st)
             #
             if self.st.__nonzero__():
                 print(self.st)
@@ -3212,9 +3302,14 @@ class Window(QtGui.QMainWindow):
                     tt_model = TauPyModel(model='iasp91')
                     arrivals = tt_model.get_travel_times(origin_info.depth/1000.0, dist_deg, ('P'))
 
+                    arrival_aux = self.ds.auxiliary_data.ArrivalData[event_id][tr.get_id().replace(".", "_")]
+                    print(arrival_aux)
+
                     # Write info to trace header
-                    tr.stats.distance = dist
-                    tr.stats.ptt = arrivals[0].time
+                    tr.stats.distance = float(arrival_aux.parameters["distkm"])
+                    tr.stats.p_arr = UTCDateTime(arrival_aux.parameters["P"]).timestamp
+                    tr.stats.p_as_arr = UTCDateTime(arrival_aux.parameters["P_as"]).timestamp
+
 
                 # Sort the st by distance from quake
                 self.st.sort(keys=['distance'])
@@ -4073,8 +4168,8 @@ def launch():
 
 
 if __name__ == "__main__":
-    # proxy_queary = query_yes_no("Input Proxy Settings?")
-    proxy_queary="no"
+    proxy_queary = query_yes_no("Input Proxy Settings?")
+    # proxy_queary="no"
 
     if proxy_queary == 'yes':
         print('')
