@@ -2,6 +2,20 @@ var map = L.map('map').setView([0, 0], 0);
 var layer = new L.StamenTileLayer("toner");
 map.addLayer(layer);
 
+
+function test() {
+    var marker = new L.CircleMarker(
+        L.latLng(-10, 140), {
+            radius: 10,
+            color: "Red"
+    });
+
+    map.addLayer(marker);
+
+}
+
+
+
 var events = {};
 
 function addEvent(event_id, row_index, latitude, longitude, a_color, p_color) {
@@ -25,7 +39,7 @@ function addEvent(event_id, row_index, latitude, longitude, a_color, p_color) {
         "active_color": a_color,
         "passive_color": p_color};
 
-//    setMarkerInactive(events[event_id]);
+    setMarkerInactive(events[event_id]);
 
 }
 
@@ -82,6 +96,15 @@ function removeEventMarkers() {
 
 function circleClick(e) {
     var clickedCircle = e.target;
-    clickedCircle.bindPopup(clickedCircle.myCustomEventID).openPopup()
+    clickedCircle.bindPopup(clickedCircle.myCustomEventID).openPopup();
+    highlightEvent(clickedCircle.myCustomEventID)
 }
+
+//if(typeof EqTableDialog != 'undefined') {
+//    function circleClick(e) {
+//        var clickedCircle = e.target;
+//    clickedCircle.bindPopup(clickedCircle.myCustomEventID).openPopup();
+//    EqTableDialog.onMap_marker_selected(clickedCircle.myCustomEventID, clickedCircle.myCustomRowID)
+//    }
+//}
 

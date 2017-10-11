@@ -81,6 +81,7 @@ class SeisDB(object):
 
                 self.dt = np.dtype(type_list)
                 self._indexed_np_array = np.array(self._index_dict_list, dtype=self.dt)
+                print(self._indexed_np_array)
                 self._use_numpy_index = True
                 self._valid_index = True
 
@@ -159,6 +160,7 @@ class SeisDB(object):
 
     def get_recording_intervals(self, net, sta, chan, tags):
         # print(self._indexed_np_array)
+        print(net,sta,chan,tags)
         _indexed_np_array_masked = np.where(
             (np.in1d(self._indexed_np_array['net'], net)) & (np.in1d(self._indexed_np_array['sta'], sta)) & (
                 np.in1d(self._indexed_np_array['cha'], chan)) & (np.in1d(self._indexed_np_array['tag'], tags)))
@@ -173,29 +175,42 @@ class SeisDB(object):
         _sorted_st_array = _st_array[_arg_sorted_st_array]
         _sorted_et_array = _et_array[_arg_sorted_st_array]
 
-        # print(_sorted_st_array)
-        # print(_sorted_et_array)
+        print(_sorted_st_array)
+        print(_sorted_et_array)
+
+        if _sorted_st_array.shape[0] == 1:
+            #i.e. there are no gaps
+            print(_sorted_st_array[0])
+            return (np.array([[_sorted_st_array[0]], [_sorted_et_array[0]]]))
+
 
         # offset the starttime array so that we start from the second recorded waveform
         _offset_st_array = _sorted_st_array[1:]
 
-        # print(_offset_st_array)
+        print(_offset_st_array)
 
         _diff_array = _offset_st_array - _sorted_et_array[:-1]
 
-        # print(_diff_array)
+        print(_diff_array)
 
         # now get indexes when gap (diff positive) or overlap (diff negative)
         # remember to add 1 to index because of offset
         _sorted_gaps_index = np.where(_diff_array > 1)
 
-        # print(_sorted_gaps_index)
-        #
+        print(_sorted_gaps_index)
+
+        # if it is empty then the gaps are smaller than 1 second ignore them
+        if _sorted_gaps_index[0].shape[0]==0:
+            return (np.array([[_sorted_st_array[0]], [_sorted_et_array[-1]]]))
+
 
 
         # recording intervals:
         # rec_start_list_after gaps = list(_sorted_st_array[_sorted_gaps_index])
         rec_end_list_after_gaps = list(_sorted_et_array[_sorted_gaps_index])
+
+        print(rec_end_list_after_gaps)
+
 
         rec_start_list =[]
         rec_end_list =[]

@@ -238,24 +238,47 @@ class EqTableDialog(QtGui.QDialog):
 
         self.show()
 
-        self.plot_events()
+        # self.plot_events()
+
+    @QtCore.pyqtSlot(str, int)
+    def onMap_marker_selected(self, event_id, row_index):
+        print(event_id,row_index)
+        # self.selected_file = os.path.basename(self.root_asdf_filename)
+        # self.station_view_itemClicked(self.ASDF_accessor[self.selected_file]['file_tree_item'])
+        # self.table_view_highlight(self.tbl_view_dict[str(df_id)], row_index)
 
     def onLoadFinished(self):
         with open('resources/map.js', 'r') as f:
             frame = self.tbldui.EQ_xtract_webView.page().mainFrame()
             frame.evaluateJavaScript(f.read())
+            # frame.evaluateJavaScript("test();")
+            for row_index, row in self.cat_df.iterrows():
+                # js_call = "test();"
+                js_call = "addEvent('{event_id}', {row_index}, " \
+                          "{latitude}, {longitude}, '{a_color}', '{p_color}');" \
+                    .format(event_id=row['event_id'], row_index=int(row_index), latitude=row['lat'],
+                            longitude=row['lon'], a_color="Red",
+                            p_color="#008000")
 
-    def plot_events(self):
-        # Plot the events
-        for row_index, row in self.cat_df.iterrows():
-            js_call = "addEvent('{event_id}', {row_index}, " \
-                      "{latitude}, {longitude}, '{a_color}', '{p_color}');" \
-                .format(event_id=row['event_id'], row_index=int(row_index), latitude=row['lat'],
-                        longitude=row['lon'], a_color="Red",
-                        p_color="#008000")
+                print(js_call)
+                frame.evaluateJavaScript(js_call)
 
-            print(js_call)
-            self.tbldui.EQ_xtract_webView.page().mainFrame().evaluateJavaScript(js_call)
+    # def plot_events(self):
+    #     # Plot the events
+    #     with open('resources/map.js', 'r') as f:
+    #         frame = self.tbldui.EQ_xtract_webView.page().mainFrame()
+    #         frame.evaluateJavaScript(f.read())
+    #
+    #         for row_index, row in self.cat_df.iterrows():
+    #             js_call = "test();"
+    #             # js_call = "addEvent('{event_id}', {row_index}, " \
+    #             #           "{latitude}, {longitude}, '{a_color}', '{p_color}');" \
+    #             #     .format(event_id=row['event_id'], row_index=int(row_index), latitude=row['lat'],
+    #             #             longitude=row['lon'], a_color="Red",
+    #             #             p_color="#008000")
+    #
+    #             print(js_call)
+    #             frame.evaluateJavaScript(js_call)
 
 
 class PickTableDialog(QtGui.QDialog):
@@ -1972,10 +1995,52 @@ class Window(QtGui.QMainWindow):
         # Create a new table_accessor dictionary for this class
         self.table_accessor = {self.tbld.tbldui.EQ_xtract_tableView: [dropped_cat_df, range(0, len(dropped_cat_df))]}
 
-        # self.tbld.cat_event_table_view.clicked.connect(self.table_view_clicked)
+        self.tbld.tbldui.EQ_xtract_tableView.clicked.connect(self.EQ_table_view_clicked)
 
         # If headers are clicked then sort
-        # self.tbld.cat_event_table_view.horizontalHeader().sectionClicked.connect(self.headerClicked)
+        self.tbld.tbldui.EQ_xtract_tableView.horizontalHeader().sectionClicked.connect(self.EQ_headerClicked)
+
+    def EQ_headerClicked(self, logicalIndex):
+        focus_widget = QtGui.QApplication.focusWidget()
+        table_df = self.table_accessor[focus_widget][0]
+
+        header = focus_widget.horizontalHeader()
+
+        self.order = header.sortIndicatorOrder()
+        table_df.sort_values(by=table_df.columns[logicalIndex],
+                             ascending=self.order, inplace=True)
+
+        self.table_accessor[focus_widget][1] = table_df.index.tolist()
+
+        if focus_widget == self.tbld.tbldui.EQ_xtract_tableView:
+            self.model = PandasModel(table_df, cat_nm=True)
+
+        focus_widget.setModel(self.model)
+        focus_widget.update()
+
+    def EQ_table_view_clicked(self):
+        focus_widget = QtGui.QApplication.focusWidget()
+        row_number = focus_widget.selectionModel().selectedRows()[0].row()
+        row_index = self.table_accessor[focus_widget][1][row_number]
+        # Highlight/Select the current row in the table
+        self.EQ_table_view_highlight(focus_widget, row_index)
+
+    def EQ_table_view_highlight(self, focus_widget, row_index):
+
+        cat_df = self.table_accessor[focus_widget][0]
+
+        if focus_widget == self.tbld.tbldui.EQ_xtract_tableView:
+            self.selected_row = cat_df.loc[row_index]
+
+            # print(self.selected_row)
+
+            # Find the row_number of this index
+            cat_row_number = self.table_accessor[focus_widget][1].index(row_index)
+            focus_widget.selectRow(cat_row_number)
+
+            # Highlight the marker on the map
+            js_call = "highlightEvent('{event_id}');".format(event_id=self.selected_row['event_id'])
+            self.tbld.tbldui.EQ_xtract_webView.page().mainFrame().evaluateJavaScript(js_call)
 
     def on_detrend_and_demean_check_box_stateChanged(self, state):
         self.update_waveform_plot()
@@ -2529,9 +2594,9 @@ class Window(QtGui.QMainWindow):
 
                     channel_children = [
                         QtGui.QTreeWidgetItem(
-                            ['StartDate: \t%s' % station_inv.start_date.strftime('%Y-%m-%dT%H:%M:%S')],
+                            ['StartDate: \t%s' % channel_inv.start_date.strftime('%Y-%m-%dT%H:%M:%S')],
                             type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
-                        QtGui.QTreeWidgetItem(['EndDate: \t%s' % station_inv.end_date.strftime('%Y-%m-%dT%H:%M:%S')],
+                        QtGui.QTreeWidgetItem(['EndDate: \t%s' % channel_inv.end_date.strftime('%Y-%m-%dT%H:%M:%S')],
                                               type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
                         QtGui.QTreeWidgetItem(['Location: \t%s' % channel_inv.location_code],
                                               type=STATION_VIEW_ITEM_TYPES["CHAN_INFO"]),
@@ -2699,6 +2764,12 @@ class Window(QtGui.QMainWindow):
                 net_st = inv[0][0].start_date
                 net_et = inv[0][0].end_date
 
+            # set the rounded to minute default time of extraction
+            # default is 1 hour after start of data or from start to end of data if shorter than 1 hour
+            ph_start = str(net_st).split('.')[0]
+            ph_end = str(net_st + 60 * 60).split('.')[0]
+
+
             self.net_item_menu = QtGui.QMenu(self)
             select_action = QtGui.QAction('Extract Waveforms for Channel', self)
             select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False,
@@ -2706,9 +2777,8 @@ class Window(QtGui.QMainWindow):
                                                                                    sta_list=sta_list,
                                                                                    chan_list=chan_list,
                                                                                    tags_list=tags_list,
-                                                                                   ph_st=str(net_st).split('.')[0],
-                                                                                   ph_et=
-                                                                                   str(net_st + 60 * 60).split('.')[0],
+                                                                                   ph_st=ph_start,
+                                                                                   ph_et=ph_end,
                                                                                    xquake=False))
 
             self.net_item_menu.addAction(select_action)
@@ -3116,10 +3186,18 @@ class Window(QtGui.QMainWindow):
                 # print(UTCDateTime(interval_tuple[0]))
                 # print(UTCDateTime(interval_tuple[1]))
 
+                print(select_net, select_sta, select_chan, select_tags, UTCDateTime(interval_tuple[0]),
+                                            UTCDateTime(interval_tuple[1]))
+
+
                 query = self.db.queryByTime(select_net, select_sta, select_chan, select_tags, interval_tuple[0],
                                             interval_tuple[1])
 
                 self.st = self.query_to_stream(query, interval_tuple)
+
+                print(self.st)
+
+
 
 
 
@@ -3130,7 +3208,14 @@ class Window(QtGui.QMainWindow):
 
 
 
+
         if not self.st == None:
+            # add in p_arr and p_as_arrival attributes in the trace stats as 0
+            for tr in self.st:
+                tr.stats.p_arr = 0
+                tr.stats.p_as_arr = 0
+
+
             self.update_waveform_plot()
             # Now output data into new ASDF if required
             if file_output:
