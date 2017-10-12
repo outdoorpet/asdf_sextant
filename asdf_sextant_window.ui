@@ -33,7 +33,7 @@
     <item row="0" column="0">
      <widget class="QTabWidget" name="central_tab">
       <property name="currentIndex">
-       <number>4</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="waveform_tab">
        <attribute name="title">
@@ -80,7 +80,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QWebView" name="web_view">
+           <widget class="QWebView" name="web_view" native="true">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
               <horstretch>0</horstretch>
@@ -99,7 +99,7 @@
               <height>211</height>
              </size>
             </property>
-            <property name="url">
+            <property name="url" stdset="0">
              <url>
               <string>about:blank</string>
              </url>
@@ -400,8 +400,8 @@
         <item>
          <layout class="QVBoxLayout" name="verticalLayout_5" stretch="1,0">
           <item>
-           <widget class="QWebView" name="events_web_view">
-            <property name="url">
+           <widget class="QWebView" name="events_web_view" native="true">
+            <property name="url" stdset="0">
              <url>
               <string>about:blank</string>
              </url>
@@ -580,7 +580,7 @@
              </widget>
             </item>
             <item row="3" column="0">
-             <widget class="QWebView" name="map_view_events">
+             <widget class="QWebView" name="map_view_events" native="true">
               <property name="sizePolicy">
                <sizepolicy hsizetype="Maximum" vsizetype="Expanding">
                 <horstretch>0</horstretch>
@@ -593,7 +593,7 @@
                 <height>16777215</height>
                </size>
               </property>
-              <property name="url">
+              <property name="url" stdset="0">
                <url>
                 <string>about:blank</string>
                </url>
@@ -617,7 +617,7 @@
              </spacer>
             </item>
             <item row="2" column="0">
-             <widget class="QWebView" name="map_view_station">
+             <widget class="QWebView" name="map_view_station" native="true">
               <property name="sizePolicy">
                <sizepolicy hsizetype="Maximum" vsizetype="Expanding">
                 <horstretch>0</horstretch>
@@ -630,7 +630,7 @@
                 <height>16777215</height>
                </size>
               </property>
-              <property name="url">
+              <property name="url" stdset="0">
                <url>
                 <string>about:blank</string>
                </url>
@@ -661,7 +661,7 @@
      <x>0</x>
      <y>0</y>
      <width>1359</width>
-     <height>26</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">

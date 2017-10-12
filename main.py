@@ -1987,7 +1987,8 @@ class Window(QtGui.QMainWindow):
         self.tbld.tbldui.EQ_xtract_tableView.customContextMenuRequested.connect(self.EQ_tbl_view_popup)
 
         #extract all or selected earthquakes
-        self.tbld.tbldui.xtract_selected_pushButton.released.connect(self.extract_multi_quakes)
+        self.tbld.tbldui.xtract_selected_pushButton.released.connect(functools.partial(self.extract_multi_quakes, "selected"))
+        self.tbld.tbldui.xtract_all_pushButton.released.connect(functools.partial(self.extract_multi_quakes, "all"))
 
         # Lookup Dictionary for table views
         self.tbl_view_dict = {"cat": self.tbld.tbldui.EQ_xtract_tableView}
@@ -3257,20 +3258,27 @@ class Window(QtGui.QMainWindow):
             msg.setStandardButtons(QtGui.QMessageBox.Ok)
             msg.exec_()
 
-    def extract_multi_quakes(self):
+    def extract_multi_quakes(self, mode):
         """
         Method to extract multiple earthquakes from the ASDF for multiple stations and can include reference stations
         Then save all of that data into a new ASDF file
         """
         focus_widget = self.tbl_view_dict["cat"]
-        # get the selected row numbers
-        row_number_list = [x.row() for x in focus_widget.selectionModel().selectedRows()]
-        self.cat_row_index_list = [self.table_accessor[focus_widget][1][x] for x in row_number_list]
+
+        if mode == "selected":
+            # get the selected row numbers
+            row_number_list = [x.row() for x in focus_widget.selectionModel().selectedRows()]
+            self.cat_row_index_list = [self.table_accessor[focus_widget][1][x] for x in row_number_list]
+            print(self.cat_row_index_list)
+
+
+        elif mode == "all":
+            self.cat_row_index_list = self.table_accessor[focus_widget][1]
 
         self.selected_row_list = [self.cat_df.loc[x] for x in self.cat_row_index_list]
 
+
         net_sta_list = self.ASDF_accessor[self.ds_id]['net_sta_list']
-        print(net_sta_list)
 
         # get a list of unique networks and stations
         net_list = list(set([x.split('.')[0] for x in net_sta_list]))
@@ -3291,6 +3299,7 @@ class Window(QtGui.QMainWindow):
             self.info_list = []
 
             for _i, sel_quake in enumerate(self.selected_row_list):
+                print("Extracting Earthquake ",_i+1, " of ", len(self.cat_row_index_list))
                 qtime = sel_quake['qtime']
                 event = self.cat[self.cat_row_index_list[_i]]
 
@@ -3302,6 +3311,9 @@ class Window(QtGui.QMainWindow):
                 self.st = self.query_to_stream(query, interval_tuple)
 
                 if not self.st == None:
+
+                    if ref_stn_out:
+                        self.retrieve_ref_data(interval_tuple, event)
 
                     self.output_event_asdf(event)
 
@@ -3547,15 +3559,20 @@ class Window(QtGui.QMainWindow):
                 # make parametric data such as expected earthquake arrival time and spce to pick arrivals
                 # store in ASDF auxillary data
 
+                if len(arrivals) == 0:
+                    # there is no P arrival (i.e. earthquake is other side of earth
+                    p_time = 0
+                else:
+                    p_time = arrivals[0].time
+
+                parameters = {"P": str(origin_info.time + p_time),
+                              "P_as": str(origin_info.time + p_time - 60 * 3),
+                              "distkm": dist / 1000.0,
+                              "dist_deg": dist_deg}
+
                 data_type = "ArrivalData"
                 data_path = event_id + "/" + tr.get_id().replace('.', '_')
 
-                print(arrivals[0])
-
-                parameters = {"P": str(origin_info.time + arrivals[0].time),
-                              "P_as": str(origin_info.time + arrivals[0].time + random.randint(-30, 30)),
-                              "distkm": dist / 1000.0,
-                              "dist_deg": dist_deg}
 
                 # add the waveforms referenced to the earthquake
                 self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
@@ -3605,10 +3622,14 @@ class Window(QtGui.QMainWindow):
             data_type = "ArrivalData"
             data_path = event_id + "/" + tr.get_id().replace('.', '_')
 
-            print(arrivals[0])
+            if len(arrivals) ==0:
+                #there is no P arrival (i.e. earthquake is other side of earth
+                p_time = 0
+            else:
+                p_time = arrivals[0].time
 
-            parameters = {"P": str(origin_info.time + arrivals[0].time),
-                          "P_as": str(origin_info.time + arrivals[0].time + random.randint(-30, 30)),
+            parameters = {"P": str(origin_info.time + p_time),
+                          "P_as": str(origin_info.time + p_time - 60*3),
                           "distkm": dist / 1000.0,
                           "dist_deg": dist_deg}
 
