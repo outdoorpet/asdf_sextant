@@ -682,6 +682,7 @@
     </property>
     <addaction name="actionFilter"/>
     <addaction name="actionStation_Availability"/>
+    <addaction name="actionCalc_Receiver_Function"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -726,6 +727,11 @@
   <action name="actionTest_tool">
    <property name="text">
     <string>test_tool</string>
+   </property>
+  </action>
+  <action name="actionCalc_Receiver_Function">
+   <property name="text">
+    <string>Calc Receiver Function</string>
    </property>
   </action>
  </widget>

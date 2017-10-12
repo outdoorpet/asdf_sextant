@@ -50,6 +50,8 @@ from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
 from obspy.taup import TauPyModel
 
 from MyMultiPlotWidget import MyMultiPlotWidget
+from asdf_rf_calc_MPI import asdf_rf_calc
+from clean_rf_output import clean_rf_ds
 
 
 # TODO: Add in ability to multiplot in auxillary data view
@@ -1147,6 +1149,7 @@ class Window(QtGui.QMainWindow):
         self.ui.openASDF.triggered.connect(self.open_asdf_file)
         self.ui.openEQ_QuakeML.triggered.connect(self.open_EQ_cat)
         self.ui.actionStation_Availability.triggered.connect(self.station_availability)
+        self.ui.actionCalc_Receiver_Function.triggered.connect(lambda: self.calculate_RF(None))
 
         # Buttons on p-time Analysis tab
         self.ui.plot_single_stn_button.released.connect(self.plot_single_stn_selected)
@@ -2889,6 +2892,11 @@ class Window(QtGui.QMainWindow):
         action.triggered.connect(lambda: self.analyse_earthquake(obj))
         self.event_item_menu.addAction(action)
 
+        rf_action = QtGui.QAction('Calculate Receiver Function', self)
+        # Connect the triggered menu object to a function passing an extra variable
+        rf_action.triggered.connect(lambda: self.calculate_RF(obj))
+        self.event_item_menu.addAction(rf_action)
+
         # ext_menu = QtGui.QMenu('Extract Time Interval', self)
         #
         # # Add actions for each tag for station
@@ -3328,14 +3336,7 @@ class Window(QtGui.QMainWindow):
             # close the dataset
             del self.out_eq_asdf
 
-    def analyse_earthquake(self, event_obj):
-        # Get event catalogue
-        self.event_cat = self.ds.events
-
-        print(event_obj)
-
-        event_id = str(event_obj.resource_id.id).split('=')[1]
-
+    def get_associated_stations_for_quake(self, event_id):
         net_set = set()
         sta_set = set()
         chan_set = set()
@@ -3354,6 +3355,83 @@ class Window(QtGui.QMainWindow):
         chan_list = list(chan_set)
 
         tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
+
+        return(net_list,sta_list,chan_list,tags_list)
+
+    # def calculate_RF(self, event_obj):
+    #     """
+    #     Method to calculate receiver function for the earthquake
+    #     :param event_obj:
+    #     :return:
+    #     """
+    #
+    #     # Get event catalogue
+    #     self.event_cat = self.ds.events
+    #
+    #     print(event_obj)
+    #
+    #     event_id = str(event_obj.resource_id.id).split('=')[1]
+    #
+    #     net_list, sta_list, chan_list, tags_list = self.get_associated_stations_for_quake(event_id)
+    #
+    #     # Launch the custom station/component selection dialog
+    #     sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
+    #                               tags_list=tags_list)
+    #     if sel_dlg.exec_():
+    #         select_net, select_sta, select_chan, select_tags = sel_dlg.getSelected()
+
+
+
+    def calculate_RF(self, event_obj):
+        # Get event catalogue
+        # self.event_cat = self.ds.events
+
+        print(event_obj)
+
+
+
+        # open up dialog of where to save rf ASDF file
+        self.out_rf_filename = str(QtGui.QFileDialog.getSaveFileName(
+            parent=self, caption="Output Receiver Function ASDF file",
+            directory=os.path.expanduser("~")))
+        if not self.out_rf_filename:
+            return
+
+        # make correct extension
+        if '.' in self.out_rf_filename:
+            self.out_rf_filename = self.out_rf_filename.split(".")[0] + ".h5"
+        else:
+            self.out_rf_filename = self.out_rf_filename + ".h5"
+
+        # remove the file if it already exists
+        if os.path.exists(self.out_rf_filename):
+            os.remove(self.out_rf_filename)
+
+        tmp_out_rf = join(dirname(self.out_rf_filename), "tmp_rf.h5")
+
+        if event_obj != None:
+            event_res_id = str(event_obj.resource_id.id)
+        else:
+            event_res_id = None
+
+        asdf_rf_calc(self.ds, tmp_out_rf, event_res_id)
+        clean_rf_ds(self.ds, tmp_out_rf, self.out_rf_filename)
+
+
+
+
+
+
+
+    def analyse_earthquake(self, event_obj):
+        # Get event catalogue
+        self.event_cat = self.ds.events
+
+        print(event_obj)
+
+        event_id = str(event_obj.resource_id.id).split('=')[1]
+
+        net_list, sta_list, chan_list, tags_list = self.get_associated_stations_for_quake(event_id)
 
 
         # Launch the custom station/component selection dialog
