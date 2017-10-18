@@ -1906,7 +1906,7 @@ class Window(QtGui.QMainWindow):
         if not asdf_file_path:
             return
 
-        # asdf_file = "/g/data1/ha3/XX_EQ_test.h5"
+        # asdf_file_path = '/g/data1/ha3/Passive/_AusArray/OA/processing/test_xcor_ashby/one_stn_xcor_out.h5'
 
         asdf_filename = basename(asdf_file_path)
 
@@ -2973,6 +2973,7 @@ class Window(QtGui.QMainWindow):
 
     def on_auxiliary_data_tree_view_itemClicked(self, item, column):
         t = item.type()
+        print(t)
 
         def recursive_tree(name, item):
             if isinstance(item, pyasdf.utils.AuxiliaryDataAccessor):
@@ -3042,6 +3043,7 @@ class Window(QtGui.QMainWindow):
         # 2D Shapes.
         elif len(aux_data.data.shape) == 2:
             try:
+                pg.setConfigOptions(imageAxisOrder='row-major')
                 img = pg.ImageItem(border="#3D8EC9")
                 img.setImage(aux_data.data.value)
                 vb = graph.addViewBox()
@@ -3051,9 +3053,21 @@ class Window(QtGui.QMainWindow):
                     self.ui.auxiliary_data_graph_page)
             except ValueError:
                 pass
-        # Anything else is currently not supported.
+        # 3D shapes plot as an image
         else:
-            raise NotImplementedError
+            print(aux_data.data.shape)
+            print(aux_data.data)
+            try:
+                pg.setConfigOptions(imageAxisOrder='row-major')
+                img = pg.ImageItem(border="#3D8EC9")
+                img.setImage(aux_data.data.value)#, xvals=np.linspace(1.,3.,aux_data.data.shape[0]))
+                vb = graph.addViewBox()
+                vb.setAspectLocked(True)
+                vb.addItem(img)
+                self.ui.auxiliary_data_stacked_widget.setCurrentWidget(
+                    self.ui.auxiliary_data_graph_page)
+            except ValueError:
+                pass
 
         # Show the parameters.
         tv = self.ui.auxiliary_data_detail_table_view
@@ -4236,6 +4250,9 @@ class Window(QtGui.QMainWindow):
                                                   starttime=UTCDateTime(sel_data[5][sta][1][0]),
                                                   endtime=UTCDateTime(sel_data[5][sta][1][1]))
 
+                # merge but preserve gaps as amsked arrays
+                ref_st_bef.merge()
+                ref_st_aft.merge()
                 print(ref_st_bef)
                 print(ref_st_aft)
 
