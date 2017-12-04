@@ -55,6 +55,7 @@ from clean_rf_output import clean_rf_ds
 
 
 # TODO: Add in ability to multiplot in auxillary data view
+# TODO: add in scroll bar to plot window when there are too many plots (like QC_P_time_compare)
 # TODO: fix Mac OS QMenu bar (currnetly the app needs to be de-focussed and focussed to make the menu bar work)
 # TODO: test functionality with ASDF file with multiple networks
 # TODO: add functionality to highlight logfile associated with a waveform
@@ -585,8 +586,6 @@ class DataAvailPlot(QtGui.QDialog):
             roi_limits_dict = {}
             # go through all rois and get edges
             for key, sta_id in self.sta_id_dict.iteritems():
-                print("jjjjj")
-                print(sta_id)
                 # get the roi
                 bef_roi, aft_roi = (self.roi_dict[sta_id]["bef"], self.roi_dict[sta_id]["aft"])
 
@@ -1036,7 +1035,7 @@ class Window(QtGui.QMainWindow):
 
 
         # set up tuple for keys pressed
-        self.modifier_keys = ()
+        self.modifier_key = ""
 
         # add in icon for reset waveform view button
         self.ui.reset_view_push_button.setIcon(QtGui.QIcon('eLsS8.png'))
@@ -1798,55 +1797,6 @@ class Window(QtGui.QMainWindow):
         popup.exec_(self.ui.references_push_button.parentWidget().mapToGlobal(
             self.ui.references_push_button.pos()))
 
-    def create_ASDF_database(self, db_filename):
-        """
-        Method to go through the traces in an ASDF fiel and create a JSON database
-        Useful if an ASDF file without a pre-existing databse is loaded in
-        This will be very slow for a large dataset so best used for small ASDF files
-        :return:
-        """
-        keys_list = []
-        info_list = []
-
-        # go through contents of asdf dataset
-        net_sta_list = self.ds.waveforms.list()
-
-        for net_sta in net_sta_list:
-            sta_accessor = self.ds.waveforms[net_sta]
-
-            asdf_tags_list = sta_accessor.list()
-
-            for asdf_trace_id in asdf_tags_list:
-                if asdf_trace_id == "StationXML":
-                    # ignore the station xml
-                    continue
-
-
-
-
-                # make a dictionary for the trace that will then be appended to a larger dictionary for whole network
-                temp_dict = {"tr_starttime": UTCDateTime(asdf_trace_id.split("__")[1]).timestamp,
-                             "tr_endtime": UTCDateTime(asdf_trace_id.split("__")[2]).timestamp,
-                             "orig_network": "",
-                             "new_network": asdf_trace_id.split("__")[0].split(".")[0],
-                             "orig_station": "",
-                             "new_station": asdf_trace_id.split("__")[0].split(".")[1],
-                             "orig_channel": "",
-                             "new_channel": asdf_trace_id.split("__")[0].split(".")[3],
-                             "orig_location": "",
-                             "new_location": asdf_trace_id.split("__")[0].split(".")[2],
-                             "seed_path": "",
-                             "seed_filename": "",
-                             "log_filename": ""}
-
-                keys_list.append(str(asdf_trace_id))
-                info_list.append(temp_dict)
-
-        big_dictionary = dict(zip(keys_list, info_list))
-
-        with open(db_filename, 'w') as fp:
-            json.dump(big_dictionary, fp)
-
     def read_ASDF_info(self):
         print("Reading ASDF Info....")
 
@@ -1899,64 +1849,55 @@ class Window(QtGui.QMainWindow):
         sb.reformat()
         print(" done with ASDF info...")
 
-    def open_json_file(self, asdf_file_path):
+    def open_json_file(self, asdf_file):
         # automatically get associated JSON database file if it exists
-        db_file_list = glob.glob(join(dirname(asdf_file_path), '*.json'))
+        db_file = glob.glob(join(dirname(asdf_file), '*.json'))
 
-        if not len(db_file_list) == 0:
+        if not len(db_file) == 0:
 
             print('')
             print("Initializing Database..")
 
             # create the seismic database
-            seisdb = SeisDB(json_file=db_file_list[0])
+            seisdb = SeisDB(json_file=db_file[0])
 
             # add it to the asdf accessor
-            self.ASDF_accessor[os.path.basename(asdf_file_path)]["db"] = seisdb
+            self.ASDF_accessor[os.path.basename(asdf_file)]["db"] = seisdb
 
             print("Seismic Database Initilized!")
 
         else:
             # create a JSON database for the ASDF file
-            print('')
-            print("Building Database..")
-            db_filename = join(dirname(asdf_file_path), os.path.basename(asdf_file_path).replace(".h5", ".json"))
-            self.create_ASDF_database(db_filename)
-            seisdb = SeisDB(json_file=db_filename)
-
-            # add it to the asdf accessor
-            self.ASDF_accessor[os.path.basename(asdf_file_path)]["db"] = seisdb
-
-            print("Seismic Database Initilized!")
+            # TODO: write JSON db build
+            pass
 
     def open_asdf_file(self):
         """
         Fill the station tree widget upon opening a new file.
         """
-        asdf_file_path = str(QtGui.QFileDialog.getOpenFileName(
+        asdf_file = str(QtGui.QFileDialog.getOpenFileName(
             parent=self, caption="Choose ASDF File",
             directory=os.path.expanduser("~"),
             filter="ASDF files (*.h5)"))
-        if not asdf_file_path:
+        if not asdf_file:
             return
 
-        # asdf_file_path = '/g/data1/ha3/Passive/_AusArray/OA/processing/test_xcor_ashby/one_stn_xcor_out.h5'
+        # asdf_file = "/g/data1/ha3/XX_EQ_test.h5"
 
-        asdf_filename = basename(asdf_file_path)
+        asdf_filename = basename(asdf_file)
 
-        ds = pyasdf.ASDFDataSet(asdf_file_path)
+        ds = pyasdf.ASDFDataSet(asdf_file)
 
         # add the asdf filename as key and the dataset into the file accessor
         self.ASDF_accessor[asdf_filename] = {"ds": ds}
 
-        self.ds = self.ASDF_accessor[asdf_filename]["ds"]
-
         # open the associated JSON database if it exists
-        self.open_json_file(asdf_file_path)
+        self.open_json_file(asdf_file)
 
         # # call the function to get the currently selected db and ds
         # self.change_active_ASDF(asdf_filename)
 
+        self.ds = self.ASDF_accessor[asdf_filename]["ds"]
         self.db = self.ASDF_accessor[asdf_filename]["db"]
         self.ds_id = asdf_filename
 
@@ -2172,43 +2113,53 @@ class Window(QtGui.QMainWindow):
         event = event.key()
 
         if (event == QtCore.Qt.Key_P):
-            self.modifier_keys = tuple("P_as")
+            self.modifier_key = "P_as"
             # print("A")
         elif (event == QtCore.Qt.Key_S):
-            self.modifier_keys = tuple("S_as")
+            self.modifier_key = "S_as"
+
+        else:
+            self.modifier_key = ""
 
 
 
     def on_graph_itemClicked(self, event):
-        temp_time = str(self.x_coord)
 
-        if (event.modifiers() == QtCore.Qt.ShiftModifier and len(self.modifier_keys)==0) or event.button() == 4:
+        items = self.waveform_graph.scene().items(event.scenePos())
+        sel_plot = [x for x in items if isinstance(x, pg.PlotItem)][0]
+        pos = QtCore.QPointF(event.scenePos())
+        vb = sel_plot.vb
 
-            self.ASDF_arrival_picker()
+        if sel_plot.sceneBoundingRect().contains(pos):
+            mousePoint = vb.mapSceneToView(pos)
+            temp_timestamp = mousePoint.x()
+        else:
+            return
 
-            items = self.waveform_graph.scene().items(event.scenePos())
-            sel_plot = [x for x in items if isinstance(x, pg.PlotItem)][0]
-            pos = QtCore.QPointF(event.scenePos())
+
+        if (event.modifiers() == QtCore.Qt.ShiftModifier and len(self.modifier_key)==0) or event.button() == 4:
+            # pop up text box for the name of the arrival
+            (arr_name, execution) = QtGui.QInputDialog.getText(self, "Arrival Picker Input", "Arrival Name",
+                                                           QtGui.QLineEdit.Normal, "TestArrival")
 
 
 
-            (text, execution) = QtGui.QInputDialog.getText(self,"Arrival Picker Input","Arrival Name",QtGui.QLineEdit.Normal,"TestArrival")
+            if not execution:
+                return
 
-            if execution:
-                print(text)
-                vLine = pg.InfiniteLine(angle=90, movable=False)
-                sel_plot.addItem(vLine, ignoreBounds=True)
+        # elif event.modifiers() == QtCore.Qt.ShiftModifier and len(self.modifier_keys) > 0:
+        elif len(self.modifier_key) > 0:
+            arr_name = self.modifier_key
 
-                vb = sel_plot.vb
-                if sel_plot.sceneBoundingRect().contains(pos):
-                    mousePoint = vb.mapSceneToView(pos)
-                    vLine.setPos(mousePoint.x())
-            else:
-                pass
+        else:
+            return
 
-        elif event.modifiers() == QtCore.Qt.ShiftModifier and len(self.modifier_keys) > 0:
-            print(self.modifier_keys)
 
+        print("++++++++++")
+
+        arr_name = str(arr_name)
+        print(arr_name)
+        
         # get the currently selected earthquake in the earthquake table
         row_number = self.tbld.tbldui.EQ_xtract_tableView.selectionModel().selectedRows()[0].row()
         row_index = self.table_accessor[self.tbld.tbldui.EQ_xtract_tableView][1][row_number]
@@ -2220,15 +2171,25 @@ class Window(QtGui.QMainWindow):
 
         tr_id = self._state["station_id"][self.active_tr_index]
 
-
         # now save the pick into the ASDF auxillary data
-        arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][tr_id.replace(".", "_")]
+        arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+            tr_id.replace(".", "_")]
         print(arrival_aux)
 
-        arrival_aux.parameters["P_as"] = temp_time
+        arrival_aux.parameters[arr_name] = str(UTCDateTime(temp_timestamp))
         print('.....')
         print(arrival_aux)
 
+
+        self.st[self.active_tr_index].stats[arr_name.lower()] = temp_timestamp
+
+
+        print(self.st[self.active_tr_index].stats)
+        self.waveform_plot_interact(
+            (self._state["waveform_plots"][self.active_tr_index], self.active_tr_index))
+
+
+        #
 
 
 
@@ -2342,24 +2303,23 @@ class Window(QtGui.QMainWindow):
 
             axY = self.active_plot.getAxis('left')
 
-            p_as_line.setData(np.array([tr.stats.p_as_arr, tr.stats.p_as_arr]),
+            p_as_line.setData(np.array([tr.stats.p_as, tr.stats.p_as]),
                                    np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
                                              axY.range[1] - 0.05 * (axY.range[1] - axY.range[0])]),
                                    pen=pg.mkPen({'color': '#ff8000', 'width': 1}))
-            p_line.setData(np.array([tr.stats.p_arr, tr.stats.p_arr]),
+            p_line.setData(np.array([tr.stats.p, tr.stats.p]),
                                 np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
                                           axY.range[1] - 0.05 * (axY.range[1] - axY.range[0])]),
                                 pen=pg.mkPen({'color': '#40ff00', 'width': 1}))
 
-            p_as_text.setPos(tr.stats.p_as_arr, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
-            p_text.setPos(tr.stats.p_arr, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
+            p_as_text.setPos(tr.stats.p_as, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
+            p_text.setPos(tr.stats.p, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
 
     def dispMousePos(self, pos):
         # Display current mouse coords if over the scatter plot area as a tooltip
         try:
-
             self.x_coord = UTCDateTime(self.plot.vb.mapSceneToView(pos).toPoint().x())
-            print(self.x_coord)
+            # print(self.x_coord)
             time_tool = self.plot.setToolTip(self.x_coord.ctime())
             pass
         except:
@@ -2550,7 +2510,7 @@ class Window(QtGui.QMainWindow):
 
             try:
 
-                if tr.stats.p_arr == 0 or tr.stats.p_as_arr == 0:
+                if tr.stats.p == 0 or tr.stats.p_as == 0:
                     # no picks for station and earthquake
                     p_as_line = None
                     p_line = None
@@ -3084,7 +3044,6 @@ class Window(QtGui.QMainWindow):
 
     def on_auxiliary_data_tree_view_itemClicked(self, item, column):
         t = item.type()
-        print(t)
 
         def recursive_tree(name, item):
             if isinstance(item, pyasdf.utils.AuxiliaryDataAccessor):
@@ -3154,7 +3113,6 @@ class Window(QtGui.QMainWindow):
         # 2D Shapes.
         elif len(aux_data.data.shape) == 2:
             try:
-                pg.setConfigOptions(imageAxisOrder='row-major')
                 img = pg.ImageItem(border="#3D8EC9")
                 img.setImage(aux_data.data.value)
                 vb = graph.addViewBox()
@@ -3164,21 +3122,9 @@ class Window(QtGui.QMainWindow):
                     self.ui.auxiliary_data_graph_page)
             except ValueError:
                 pass
-        # 3D shapes plot as an image
+        # Anything else is currently not supported.
         else:
-            print(aux_data.data.shape)
-            print(aux_data.data)
-            try:
-                pg.setConfigOptions(imageAxisOrder='row-major')
-                img = pg.ImageItem(border="#3D8EC9")
-                img.setImage(aux_data.data.value)#, xvals=np.linspace(1.,3.,aux_data.data.shape[0]))
-                vb = graph.addViewBox()
-                vb.setAspectLocked(True)
-                vb.addItem(img)
-                self.ui.auxiliary_data_stacked_widget.setCurrentWidget(
-                    self.ui.auxiliary_data_graph_page)
-            except ValueError:
-                pass
+            raise NotImplementedError
 
         # Show the parameters.
         tv = self.ui.auxiliary_data_detail_table_view
@@ -3405,8 +3351,8 @@ class Window(QtGui.QMainWindow):
         if not self.st == None:
             # add in p_arr and p_as_arrival attributes in the trace stats as 0
             for tr in self.st:
-                tr.stats.p_arr = 0
-                tr.stats.p_as_arr = 0
+                tr.stats.p = 0
+                tr.stats.p_as = 0
 
 
             self.update_waveform_plot()
@@ -3665,8 +3611,8 @@ class Window(QtGui.QMainWindow):
 
                     # Write info to trace header
                     tr.stats.distance = float(arrival_aux.parameters["distkm"])
-                    tr.stats.p_arr = UTCDateTime(arrival_aux.parameters["P"]).timestamp
-                    tr.stats.p_as_arr = UTCDateTime(arrival_aux.parameters["P_as"]).timestamp
+                    tr.stats.p = UTCDateTime(arrival_aux.parameters["P"]).timestamp
+                    tr.stats.p_as = UTCDateTime(arrival_aux.parameters["P_as"]).timestamp
 
 
                 # Sort the st by distance from quake
@@ -3949,12 +3895,12 @@ class Window(QtGui.QMainWindow):
             # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
             if hasattr(self, "cat_df"):
 
-                self.data_avail_plot = DataAvailPlot(parent=self, net_list=select_net, sta_list=select_sta,
-                                                 chan_list=select_chan, tags_list=select_tags,
+                self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+                                                 chan_list=select_chan, tags_list=tags_list,
                                                  rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
             else:
-                self.data_avail_plot = DataAvailPlot(parent=self, net_list=select_net, sta_list=select_sta,
-                                                 chan_list=select_chan, tags_list=select_tags,
+                self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+                                                 chan_list=select_chan, tags_list=tags_list,
                                                  rec_int_dict=self.recording_intervals)
 
             # connect to the go button in plot
@@ -4234,7 +4180,6 @@ class Window(QtGui.QMainWindow):
         self.ASDF_accessor[xcor_asdf_filename] = {"ds": xcor_ds}
 
         print('Retrieving Data for QC-XCOR from array.....')
-        print(sel_data)
         print(sel_data[5])
 
         # set up a unique identifier counter
@@ -4367,12 +4312,6 @@ class Window(QtGui.QMainWindow):
                                                   starttime=UTCDateTime(sel_data[5][sta][1][0]),
                                                   endtime=UTCDateTime(sel_data[5][sta][1][1]))
 
-                # merge but preserve gaps as amsked arrays
-                ref_st_bef.merge()
-                ref_st_aft.merge()
-                print(ref_st_bef)
-                print(ref_st_aft)
-
                 uid_counter += 1
                 bef_uid = uid_counter
                 bef_sta = ref_st_bef[0].get_id()
@@ -4404,8 +4343,6 @@ class Window(QtGui.QMainWindow):
 
             # add in station xml
             xcor_ds.add_stationxml(select_inv)
-
-        # now
 
     def plot_single_stn_selected(self):
         pass
