@@ -55,7 +55,6 @@ from clean_rf_output import clean_rf_ds
 
 
 # TODO: Add in ability to multiplot in auxillary data view
-# TODO: add in scroll bar to plot window when there are too many plots (like QC_P_time_compare)
 # TODO: fix Mac OS QMenu bar (currnetly the app needs to be de-focussed and focussed to make the menu bar work)
 # TODO: test functionality with ASDF file with multiple networks
 # TODO: add functionality to highlight logfile associated with a waveform
@@ -586,6 +585,8 @@ class DataAvailPlot(QtGui.QDialog):
             roi_limits_dict = {}
             # go through all rois and get edges
             for key, sta_id in self.sta_id_dict.iteritems():
+                print("jjjjj")
+                print(sta_id)
                 # get the roi
                 bef_roi, aft_roi = (self.roi_dict[sta_id]["bef"], self.roi_dict[sta_id]["aft"])
 
@@ -1797,6 +1798,55 @@ class Window(QtGui.QMainWindow):
         popup.exec_(self.ui.references_push_button.parentWidget().mapToGlobal(
             self.ui.references_push_button.pos()))
 
+    def create_ASDF_database(self, db_filename):
+        """
+        Method to go through the traces in an ASDF fiel and create a JSON database
+        Useful if an ASDF file without a pre-existing databse is loaded in
+        This will be very slow for a large dataset so best used for small ASDF files
+        :return:
+        """
+        keys_list = []
+        info_list = []
+
+        # go through contents of asdf dataset
+        net_sta_list = self.ds.waveforms.list()
+
+        for net_sta in net_sta_list:
+            sta_accessor = self.ds.waveforms[net_sta]
+
+            asdf_tags_list = sta_accessor.list()
+
+            for asdf_trace_id in asdf_tags_list:
+                if asdf_trace_id == "StationXML":
+                    # ignore the station xml
+                    continue
+
+
+
+
+                # make a dictionary for the trace that will then be appended to a larger dictionary for whole network
+                temp_dict = {"tr_starttime": UTCDateTime(asdf_trace_id.split("__")[1]).timestamp,
+                             "tr_endtime": UTCDateTime(asdf_trace_id.split("__")[2]).timestamp,
+                             "orig_network": "",
+                             "new_network": asdf_trace_id.split("__")[0].split(".")[0],
+                             "orig_station": "",
+                             "new_station": asdf_trace_id.split("__")[0].split(".")[1],
+                             "orig_channel": "",
+                             "new_channel": asdf_trace_id.split("__")[0].split(".")[3],
+                             "orig_location": "",
+                             "new_location": asdf_trace_id.split("__")[0].split(".")[2],
+                             "seed_path": "",
+                             "seed_filename": "",
+                             "log_filename": ""}
+
+                keys_list.append(str(asdf_trace_id))
+                info_list.append(temp_dict)
+
+        big_dictionary = dict(zip(keys_list, info_list))
+
+        with open(db_filename, 'w') as fp:
+            json.dump(big_dictionary, fp)
+
     def read_ASDF_info(self):
         print("Reading ASDF Info....")
 
@@ -1849,55 +1899,64 @@ class Window(QtGui.QMainWindow):
         sb.reformat()
         print(" done with ASDF info...")
 
-    def open_json_file(self, asdf_file):
+    def open_json_file(self, asdf_file_path):
         # automatically get associated JSON database file if it exists
-        db_file = glob.glob(join(dirname(asdf_file), '*.json'))
+        db_file_list = glob.glob(join(dirname(asdf_file_path), '*.json'))
 
-        if not len(db_file) == 0:
+        if not len(db_file_list) == 0:
 
             print('')
             print("Initializing Database..")
 
             # create the seismic database
-            seisdb = SeisDB(json_file=db_file[0])
+            seisdb = SeisDB(json_file=db_file_list[0])
 
             # add it to the asdf accessor
-            self.ASDF_accessor[os.path.basename(asdf_file)]["db"] = seisdb
+            self.ASDF_accessor[os.path.basename(asdf_file_path)]["db"] = seisdb
 
             print("Seismic Database Initilized!")
 
         else:
             # create a JSON database for the ASDF file
-            # TODO: write JSON db build
-            pass
+            print('')
+            print("Building Database..")
+            db_filename = join(dirname(asdf_file_path), os.path.basename(asdf_file_path).replace(".h5", ".json"))
+            self.create_ASDF_database(db_filename)
+            seisdb = SeisDB(json_file=db_filename)
+
+            # add it to the asdf accessor
+            self.ASDF_accessor[os.path.basename(asdf_file_path)]["db"] = seisdb
+
+            print("Seismic Database Initilized!")
 
     def open_asdf_file(self):
         """
         Fill the station tree widget upon opening a new file.
         """
-        asdf_file = str(QtGui.QFileDialog.getOpenFileName(
+        asdf_file_path = str(QtGui.QFileDialog.getOpenFileName(
             parent=self, caption="Choose ASDF File",
             directory=os.path.expanduser("~"),
             filter="ASDF files (*.h5)"))
-        if not asdf_file:
+        if not asdf_file_path:
             return
 
-        # asdf_file = "/g/data1/ha3/XX_EQ_test.h5"
+        # asdf_file_path = '/g/data1/ha3/Passive/_AusArray/OA/processing/test_xcor_ashby/one_stn_xcor_out.h5'
 
-        asdf_filename = basename(asdf_file)
+        asdf_filename = basename(asdf_file_path)
 
-        ds = pyasdf.ASDFDataSet(asdf_file)
+        ds = pyasdf.ASDFDataSet(asdf_file_path)
 
         # add the asdf filename as key and the dataset into the file accessor
         self.ASDF_accessor[asdf_filename] = {"ds": ds}
 
+        self.ds = self.ASDF_accessor[asdf_filename]["ds"]
+
         # open the associated JSON database if it exists
-        self.open_json_file(asdf_file)
+        self.open_json_file(asdf_file_path)
 
         # # call the function to get the currently selected db and ds
         # self.change_active_ASDF(asdf_filename)
 
-        self.ds = self.ASDF_accessor[asdf_filename]["ds"]
         self.db = self.ASDF_accessor[asdf_filename]["db"]
         self.ds_id = asdf_filename
 
@@ -3025,6 +3084,7 @@ class Window(QtGui.QMainWindow):
 
     def on_auxiliary_data_tree_view_itemClicked(self, item, column):
         t = item.type()
+        print(t)
 
         def recursive_tree(name, item):
             if isinstance(item, pyasdf.utils.AuxiliaryDataAccessor):
@@ -3094,6 +3154,7 @@ class Window(QtGui.QMainWindow):
         # 2D Shapes.
         elif len(aux_data.data.shape) == 2:
             try:
+                pg.setConfigOptions(imageAxisOrder='row-major')
                 img = pg.ImageItem(border="#3D8EC9")
                 img.setImage(aux_data.data.value)
                 vb = graph.addViewBox()
@@ -3103,9 +3164,21 @@ class Window(QtGui.QMainWindow):
                     self.ui.auxiliary_data_graph_page)
             except ValueError:
                 pass
-        # Anything else is currently not supported.
+        # 3D shapes plot as an image
         else:
-            raise NotImplementedError
+            print(aux_data.data.shape)
+            print(aux_data.data)
+            try:
+                pg.setConfigOptions(imageAxisOrder='row-major')
+                img = pg.ImageItem(border="#3D8EC9")
+                img.setImage(aux_data.data.value)#, xvals=np.linspace(1.,3.,aux_data.data.shape[0]))
+                vb = graph.addViewBox()
+                vb.setAspectLocked(True)
+                vb.addItem(img)
+                self.ui.auxiliary_data_stacked_widget.setCurrentWidget(
+                    self.ui.auxiliary_data_graph_page)
+            except ValueError:
+                pass
 
         # Show the parameters.
         tv = self.ui.auxiliary_data_detail_table_view
@@ -3876,12 +3949,12 @@ class Window(QtGui.QMainWindow):
             # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
             if hasattr(self, "cat_df"):
 
-                self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
-                                                 chan_list=select_chan, tags_list=tags_list,
+                self.data_avail_plot = DataAvailPlot(parent=self, net_list=select_net, sta_list=select_sta,
+                                                 chan_list=select_chan, tags_list=select_tags,
                                                  rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
             else:
-                self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
-                                                 chan_list=select_chan, tags_list=tags_list,
+                self.data_avail_plot = DataAvailPlot(parent=self, net_list=select_net, sta_list=select_sta,
+                                                 chan_list=select_chan, tags_list=select_tags,
                                                  rec_int_dict=self.recording_intervals)
 
             # connect to the go button in plot
@@ -4161,6 +4234,7 @@ class Window(QtGui.QMainWindow):
         self.ASDF_accessor[xcor_asdf_filename] = {"ds": xcor_ds}
 
         print('Retrieving Data for QC-XCOR from array.....')
+        print(sel_data)
         print(sel_data[5])
 
         # set up a unique identifier counter
@@ -4293,6 +4367,12 @@ class Window(QtGui.QMainWindow):
                                                   starttime=UTCDateTime(sel_data[5][sta][1][0]),
                                                   endtime=UTCDateTime(sel_data[5][sta][1][1]))
 
+                # merge but preserve gaps as amsked arrays
+                ref_st_bef.merge()
+                ref_st_aft.merge()
+                print(ref_st_bef)
+                print(ref_st_aft)
+
                 uid_counter += 1
                 bef_uid = uid_counter
                 bef_sta = ref_st_bef[0].get_id()
@@ -4324,6 +4404,8 @@ class Window(QtGui.QMainWindow):
 
             # add in station xml
             xcor_ds.add_stationxml(select_inv)
+
+        # now
 
     def plot_single_stn_selected(self):
         pass
