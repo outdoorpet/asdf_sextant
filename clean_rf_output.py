@@ -3,6 +3,7 @@ from os.path import join, exists
 from os import remove as rm
 import numpy as np
 from rf import rfstats
+from obspy.geodetics import degrees2kilometers
 
 def clean_rf_ds(in_ds, ASDF_temp, ASDF_out):
     """
@@ -43,7 +44,7 @@ def clean_rf_ds(in_ds, ASDF_temp, ASDF_out):
 
                 rf_st = rf_sta_accessor[asdf_id]
                 rf_tr = rf_st[0]
-                # print(rf_st)
+                print(rf_tr)
                 event_res_id = rf_tr.stats.asdf.labels[0]
     
                 # get the event object with the assocatieted resource id
@@ -72,6 +73,7 @@ def clean_rf_ds(in_ds, ASDF_temp, ASDF_out):
                         eq_tr = eq_st[0]
     
                         # print(eq_st)
+                        print(eq_tr)
     
                         #get the earthquake auxillary info for trace
                         arrival_aux = in_ds.auxiliary_data.ArrivalData[event_res_id.split("=")[1]][eq_tr.get_id().replace(".", "_")]
@@ -97,6 +99,8 @@ def clean_rf_ds(in_ds, ASDF_temp, ASDF_out):
                         # as well as calculate some new data required for the RFs
                         data_type = "ArrivalData"
                         data_path = event_res_id.split("=")[1] + "/" + eq_tr.get_id().replace('.', '_')
+
+                        print(arrival_aux.parameters["P"])
     
     
                         #write the earthquake waveforms if they ahvenyt been already
@@ -129,12 +133,13 @@ def clean_rf_ds(in_ds, ASDF_temp, ASDF_out):
     
                 # calculate extra parameters for reciever functions
                 stats = rfstats(station=rf_inv[0][0], event=event, phase='P', dist_range=(10, 90))
-                # print(stats)
+                print(stats)
+
     
-                parameters = {"P": arrival_aux.parameters["P"],
-                              "P_as": arrival_aux.parameters["P_as"],
-                              "distkm": arrival_aux.parameters["distkm"],
-                              "dist_deg": arrival_aux.parameters["dist_deg"],
+                parameters = {"P": str(stats["onset"]),
+                              "P_as": str(stats["onset"]-60*3),
+                              "distkm": degrees2kilometers(stats["distance"]),
+                              "dist_deg": stats["distance"],
                               "back_azimuth": stats["back_azimuth"],
                               "slowness": stats["slowness"],
                               "inclination": stats["inclination"]}

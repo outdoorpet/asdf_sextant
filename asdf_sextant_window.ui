@@ -181,8 +181,21 @@
             </item>
             <item>
              <widget class="QToolButton" name="waveform_filter_settings_toolButton">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
               <property name="text">
                <string>Filter Settings</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="pick_arrivals_tool_button">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="text">
+               <string>PickArrivals</string>
               </property>
              </widget>
             </item>

@@ -1033,6 +1033,10 @@ class Window(QtGui.QMainWindow):
         # set up dictionary for different ASDF files and associated attributes/items
         self.ASDF_accessor = {}
 
+
+        # set up tuple for keys pressed
+        self.modifier_keys = ()
+
         # add in icon for reset waveform view button
         self.ui.reset_view_push_button.setIcon(QtGui.QIcon('eLsS8.png'))
 
@@ -1158,6 +1162,9 @@ class Window(QtGui.QMainWindow):
 
         # waveform options button
         self.ui.waveform_filter_settings_toolButton.released.connect(self.waveform_filter_settings)
+
+        # picker tool
+        self.ui.pick_arrivals_tool_button.released.connect(self.ASDF_arrival_picker)
 
         self.ui.station_view.itemEntered.connect(
             self.on_station_view_itemEntered)
@@ -1540,59 +1547,86 @@ class Window(QtGui.QMainWindow):
         items = []
         self._state["quake_ids"] = {}
 
-        for event in self.events:
-            if event.origins:
-                org = event.preferred_origin() or event.origins[0]
+        if not len(self.events) == 0:
 
-                js_call = "addEvent('{event_id}', {latitude}, {longitude});" \
-                    .format(event_id=event.resource_id.id,
-                            latitude=org.latitude,
-                            longitude=org.longitude)
-                self.ui.events_web_view.page().mainFrame().evaluateJavaScript(
-                    js_call)
+            # create empty data frame
+            self.cat_df = pd.DataFrame(data=None, columns=['event_id', 'qtime', 'lat', 'lon', 'depth', 'mag'])
 
-            event_item = QtGui.QTreeWidgetItem(
-                [event.resource_id.id],
-                type=EVENT_VIEW_ITEM_TYPES["EVENT"])
-            self._state["quake_ids"][event.resource_id.id] = event_item
+            # iterate through the events
+            for _i, event in enumerate(self.events):
+                if event.origins:
+                    org = event.preferred_origin() or event.origins[0]
 
-            origin_item = QtGui.QTreeWidgetItem(["Origins"], type=-1)
-            magnitude_item = QtGui.QTreeWidgetItem(["Magnitudes"], type=-1)
-            focmec_item = QtGui.QTreeWidgetItem(["Focal Mechanisms"], type=-1)
+                    js_call = "addEvent('{event_id}', {latitude}, {longitude});" \
+                        .format(event_id=event.resource_id.id,
+                                latitude=org.latitude,
+                                longitude=org.longitude)
+                    self.ui.events_web_view.page().mainFrame().evaluateJavaScript(
+                        js_call)
 
-            org_items = []
-            for origin in event.origins:
-                org_items.append(
-                    QtGui.QTreeWidgetItem(
-                        [origin.resource_id.id],
-                        type=EVENT_VIEW_ITEM_TYPES["ORIGIN"]))
-                self._state["quake_ids"][origin.resource_id.id] = org_items[-1]
-            origin_item.addChildren(org_items)
+                event_item = QtGui.QTreeWidgetItem(
+                    [event.resource_id.id],
+                    type=EVENT_VIEW_ITEM_TYPES["EVENT"])
+                self._state["quake_ids"][event.resource_id.id] = event_item
 
-            mag_items = []
-            for magnitude in event.magnitudes:
-                mag_items.append(
-                    QtGui.QTreeWidgetItem(
-                        [magnitude.resource_id.id],
-                        type=EVENT_VIEW_ITEM_TYPES["MAGNITUDE"]))
-                self._state["quake_ids"][magnitude.resource_id.id] = \
-                    mag_items[-1]
-            magnitude_item.addChildren(mag_items)
+                origin_item = QtGui.QTreeWidgetItem(["Origins"], type=-1)
+                magnitude_item = QtGui.QTreeWidgetItem(["Magnitudes"], type=-1)
+                focmec_item = QtGui.QTreeWidgetItem(["Focal Mechanisms"], type=-1)
 
-            focmec_items = []
-            for focmec in event.focal_mechanisms:
-                focmec_items.append(
-                    QtGui.QTreeWidgetItem(
-                        [focmec.resource_id.id],
-                        type=EVENT_VIEW_ITEM_TYPES["FOCMEC"]))
-                self._state["quake_ids"][focmec.resource_id.id] = \
-                    focmec_items[-1]
-            focmec_item.addChildren(focmec_items)
+                org_items = []
+                for origin in event.origins:
+                    org_items.append(
+                        QtGui.QTreeWidgetItem(
+                            [origin.resource_id.id],
+                            type=EVENT_VIEW_ITEM_TYPES["ORIGIN"]))
+                    self._state["quake_ids"][origin.resource_id.id] = org_items[-1]
+                origin_item.addChildren(org_items)
 
-            event_item.addChildren([origin_item, magnitude_item, focmec_item])
-            items.append(event_item)
+                mag_items = []
+                for magnitude in event.magnitudes:
+                    mag_items.append(
+                        QtGui.QTreeWidgetItem(
+                            [magnitude.resource_id.id],
+                            type=EVENT_VIEW_ITEM_TYPES["MAGNITUDE"]))
+                    self._state["quake_ids"][magnitude.resource_id.id] = \
+                        mag_items[-1]
+                magnitude_item.addChildren(mag_items)
 
-        self.ui.event_tree_widget.insertTopLevelItems(0, items)
+                focmec_items = []
+                for focmec in event.focal_mechanisms:
+                    focmec_items.append(
+                        QtGui.QTreeWidgetItem(
+                            [focmec.resource_id.id],
+                            type=EVENT_VIEW_ITEM_TYPES["FOCMEC"]))
+                    self._state["quake_ids"][focmec.resource_id.id] = \
+                        focmec_items[-1]
+                focmec_item.addChildren(focmec_items)
+
+                event_item.addChildren([origin_item, magnitude_item, focmec_item])
+                items.append(event_item)
+
+                # Get quake origin info
+                origin_info = event.preferred_origin() or event.origins[0]
+
+                try:
+                    mag_info = event.preferred_magnitude() or event.magnitudes[0]
+                    magnitude = mag_info.mag
+                except IndexError:
+                    # No magnitude for event
+                    magnitude = None
+
+                self.cat_df.loc[_i] = [str(event.resource_id.id).split('=')[1], int(origin_info.time.timestamp),
+                                       origin_info.latitude, origin_info.longitude,
+                                       origin_info.depth / 1000, magnitude]
+
+            self.cat_df.reset_index(drop=True, inplace=True)
+
+            print('------------')
+            print(self.cat_df)
+
+            self.build_EQ_extract_table()
+
+            self.ui.event_tree_widget.insertTopLevelItems(0, items)
 
     def build_station_view_list(self):
         if not hasattr(self, "ds") or not self.ds:
@@ -2070,19 +2104,82 @@ class Window(QtGui.QMainWindow):
     def on_waveform_filter_check_box_stateChanged(self, state):
         self.update_waveform_plot()
 
+    def keyPressEvent(self, event):
+        """
+        Overide the key press event, so that it can catch when P or S is used as a modifier during mouseclick
+        :param event:
+        :return:
+        """
+        event = event.key()
+
+        if (event == QtCore.Qt.Key_P):
+            self.modifier_keys = tuple("P_as")
+            # print("A")
+        elif (event == QtCore.Qt.Key_S):
+            self.modifier_keys = tuple("S_as")
+
+
+
     def on_graph_itemClicked(self, event):
-        if event.button() == 4:
+        temp_time = str(self.x_coord)
+
+        if (event.modifiers() == QtCore.Qt.ShiftModifier and len(self.modifier_keys)==0) or event.button() == 4:
+
+            self.ASDF_arrival_picker()
+
             items = self.waveform_graph.scene().items(event.scenePos())
             sel_plot = [x for x in items if isinstance(x, pg.PlotItem)][0]
             pos = QtCore.QPointF(event.scenePos())
 
-            vLine = pg.InfiniteLine(angle=90, movable=True)
-            sel_plot.addItem(vLine, ignoreBounds=True)
 
-            vb = sel_plot.vb
-            if sel_plot.sceneBoundingRect().contains(pos):
-                mousePoint = vb.mapSceneToView(pos)
-                vLine.setPos(mousePoint.x())
+
+            (text, execution) = QtGui.QInputDialog.getText(self,"Arrival Picker Input","Arrival Name",QtGui.QLineEdit.Normal,"TestArrival")
+
+            if execution:
+                print(text)
+                vLine = pg.InfiniteLine(angle=90, movable=False)
+                sel_plot.addItem(vLine, ignoreBounds=True)
+
+                vb = sel_plot.vb
+                if sel_plot.sceneBoundingRect().contains(pos):
+                    mousePoint = vb.mapSceneToView(pos)
+                    vLine.setPos(mousePoint.x())
+            else:
+                pass
+
+        elif event.modifiers() == QtCore.Qt.ShiftModifier and len(self.modifier_keys) > 0:
+            print(self.modifier_keys)
+
+        # get the currently selected earthquake in the earthquake table
+        row_number = self.tbld.tbldui.EQ_xtract_tableView.selectionModel().selectedRows()[0].row()
+        row_index = self.table_accessor[self.tbld.tbldui.EQ_xtract_tableView][1][row_number]
+
+        # get the event id
+        self.select_quake = self.cat_df.loc[row_index]
+        print(self.select_quake)
+        print(self.select_quake["event_id"])
+
+        tr_id = self._state["station_id"][self.active_tr_index]
+
+
+        # now save the pick into the ASDF auxillary data
+        arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][tr_id.replace(".", "_")]
+        print(arrival_aux)
+
+        arrival_aux.parameters["P_as"] = temp_time
+        print('.....')
+        print(arrival_aux)
+
+
+
+
+    def ASDF_arrival_picker(self):
+        """
+        Method to pick and save arrivals (or anything else) referneced to a specific time/station/channel etc...
+        :return:
+        """
+
+        print("opening arrival picker")
 
     def gather_events_checkbox_changed(self):
         self.sort_method_selected(self.ui.sort_drop_down_button_2, ('no_sort', 'no_sort'), False)
@@ -2172,19 +2269,19 @@ class Window(QtGui.QMainWindow):
 
         temp_st = self.st.copy()
 
-        plot = plot_args[0]
-        tr_index = plot_args[1]
+        self.active_plot = plot_args[0]
+        self.active_tr_index = plot_args[1]
 
-        p_line = self._state["p_lines"][tr_index]
-        p_as_line = self._state["p_as_lines"][tr_index]
-        p_text = self._state["p_text"][tr_index]
-        p_as_text = self._state["p_as_text"][tr_index]
+        p_line = self._state["p_lines"][self.active_tr_index]
+        p_as_line = self._state["p_as_lines"][self.active_tr_index]
+        p_text = self._state["p_text"][self.active_tr_index]
+        p_as_text = self._state["p_as_text"][self.active_tr_index]
 
         if not (p_line == None or p_as_line == None):
             # get the corresponding trace
-            tr = temp_st[tr_index]
+            tr = temp_st[self.active_tr_index]
 
-            axY = plot.getAxis('left')
+            axY = self.active_plot.getAxis('left')
 
             p_as_line.setData(np.array([tr.stats.p_as_arr, tr.stats.p_as_arr]),
                                    np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
@@ -2201,8 +2298,10 @@ class Window(QtGui.QMainWindow):
     def dispMousePos(self, pos):
         # Display current mouse coords if over the scatter plot area as a tooltip
         try:
-            x_coord = UTCDateTime(self.plot.vb.mapSceneToView(pos).toPoint().x()).ctime()
-            time_tool = self.plot.setToolTip(x_coord)
+
+            self.x_coord = UTCDateTime(self.plot.vb.mapSceneToView(pos).toPoint().x())
+            print(self.x_coord)
+            time_tool = self.plot.setToolTip(self.x_coord.ctime())
             pass
         except:
             pass
@@ -2320,6 +2419,7 @@ class Window(QtGui.QMainWindow):
         self.ui.detrend_and_demean_check_box.setEnabled(True)
         self.ui.waveform_filter_check_box.setEnabled(True)
         self.ui.waveform_filter_settings_toolButton.setEnabled(True)
+        self.ui.pick_arrivals_tool_button.setEnabled(True)
 
         # Get the filter settings.
         filter_settings = {}
@@ -2388,29 +2488,39 @@ class Window(QtGui.QMainWindow):
             # When Mouse is moved over plot print the data coordinates
             self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
 
-            if tr.stats.p_arr == 0 or tr.stats.p_as_arr == 0:
-                # no picks for station and earthquake
+
+            try:
+
+                if tr.stats.p_arr == 0 or tr.stats.p_as_arr == 0:
+                    # no picks for station and earthquake
+                    p_as_line = None
+                    p_line = None
+
+                    p_as_text = None
+                    p_text = None
+
+                else:
+
+                    # plot vertical lines for P theroetical and P-picked arrival
+                    p_as_line = pg.PlotCurveItem()
+                    p_line = pg.PlotCurveItem()
+
+                    self.plot.addItem(p_as_line)
+                    self.plot.addItem(p_line)
+
+                    # text for P and P-as arrivals
+                    p_as_text = pg.TextItem("P_as", anchor=(1, 1), color='#ff8000')
+                    p_text = pg.TextItem("P", anchor=(1, 1), color='#40ff00')
+
+                    self.plot.addItem(p_as_text)
+                    self.plot.addItem(p_text)
+            except AttributeError:
+                # the is no p arrival time in the ASDF auxillary data
                 p_as_line = None
                 p_line = None
 
                 p_as_text = None
                 p_text = None
-
-            else:
-
-                # plot vertical lines for P theroetical and P-picked arrival
-                p_as_line = pg.PlotCurveItem()
-                p_line = pg.PlotCurveItem()
-
-                self.plot.addItem(p_as_line)
-                self.plot.addItem(p_line)
-
-                # text for P and P-as arrivals
-                p_as_text = pg.TextItem("P_as", anchor=(1, 1), color='#ff8000')
-                p_text = pg.TextItem("P", anchor=(1, 1), color='#40ff00')
-
-                self.plot.addItem(p_as_text)
-                self.plot.addItem(p_text)
 
             self._state["p_lines"].append(p_line)
             self._state["p_as_lines"].append(p_as_line)
@@ -2422,6 +2532,7 @@ class Window(QtGui.QMainWindow):
             vLine = pg.InfiniteLine(angle=90, movable=True)
             self.plot.addItem(vLine, ignoreBounds=True)
 
+            # when mouse is clicked with modifer then open picker
             self.plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
 
         self.waveform_graph.setNumberPlots(len(temp_st))
@@ -3380,8 +3491,6 @@ class Window(QtGui.QMainWindow):
     #     if sel_dlg.exec_():
     #         select_net, select_sta, select_chan, select_tags = sel_dlg.getSelected()
 
-
-
     def calculate_RF(self, event_obj):
         # Get event catalogue
         # self.event_cat = self.ds.events
@@ -3417,12 +3526,6 @@ class Window(QtGui.QMainWindow):
         asdf_rf_calc(self.ds, tmp_out_rf, event_res_id)
         clean_rf_ds(self.ds, tmp_out_rf, self.out_rf_filename)
 
-
-
-
-
-
-
     def analyse_earthquake(self, event_obj):
         # Get event catalogue
         self.event_cat = self.ds.events
@@ -3430,6 +3533,12 @@ class Window(QtGui.QMainWindow):
         print(event_obj)
 
         event_id = str(event_obj.resource_id.id).split('=')[1]
+
+        # get the row index in the data frame
+        self.select_quake = self.cat_df.loc[self.cat_df['event_id'] == event_id]
+        event_row_index = self.select_quake.index.tolist()[0]
+
+        self.EQ_table_view_highlight(self.tbld.tbldui.EQ_xtract_tableView, event_row_index)
 
         net_list, sta_list, chan_list, tags_list = self.get_associated_stations_for_quake(event_id)
 
@@ -3466,16 +3575,17 @@ class Window(QtGui.QMainWindow):
 
 
                     # Get inventory for trace
-                    inv = self.ds.waveforms[tr.stats.network + '.' +tr.stats.station].StationXML
-                    sta_coords = inv.get_coordinates(tr.get_id())
+                    # inv = self.ds.waveforms[tr.stats.network + '.' +tr.stats.station].StationXML
 
-                    dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
-                                                    sta_coords['longitude'],
-                                                    origin_info.latitude,
-                                                    origin_info.longitude)
-                    dist_deg = kilometer2degrees(dist/1000.0)
-                    tt_model = TauPyModel(model='iasp91')
-                    arrivals = tt_model.get_travel_times(origin_info.depth/1000.0, dist_deg, ('P'))
+                    # sta_coords = inv.get_coordinates(tr.get_id())
+                    #
+                    # dist, baz, _ = gps2dist_azimuth(sta_coords['latitude'],
+                    #                                 sta_coords['longitude'],
+                    #                                 origin_info.latitude,
+                    #                                 origin_info.longitude)
+                    # dist_deg = kilometer2degrees(dist/1000.0)
+                    # tt_model = TauPyModel(model='iasp91')
+                    # arrivals = tt_model.get_travel_times(origin_info.depth/1000.0, dist_deg, ('P'))
 
                     arrival_aux = self.ds.auxiliary_data.ArrivalData[event_id][tr.get_id().replace(".", "_")]
                     print(arrival_aux)
@@ -4036,6 +4146,13 @@ class Window(QtGui.QMainWindow):
 
         if os.path.exists(xcor_asdf_file):
             os.remove(xcor_asdf_file)
+
+        # output json filename
+        xcor_json_out = xcor_asdf_filename.split(".")[0] + ".json"
+
+        # remove if exists
+        if os.path.exists(xcor_json_out):
+            os.remove(xcor_json_out)
 
         # open up new ASDF file for the xcorr data
         xcor_ds = pyasdf.ASDFDataSet(xcor_asdf_file)
