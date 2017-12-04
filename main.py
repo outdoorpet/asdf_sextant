@@ -2171,14 +2171,40 @@ class Window(QtGui.QMainWindow):
 
         tr_id = self._state["station_id"][self.active_tr_index]
 
-        # now save the pick into the ASDF auxillary data
-        arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
-            tr_id.replace(".", "_")]
-        print(arrival_aux)
 
-        arrival_aux.parameters[arr_name] = str(UTCDateTime(temp_timestamp))
+
+
+
+        # tempoaraly save the auxillary data
+        temp_arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+            tr_id.replace(".", "_")]
+        print(temp_arrival_aux)
+
+        # update the parameters with the pick
+
+
+        temp_arrival_aux.parameters[arr_name] = str(UTCDateTime(temp_timestamp))
+
+        # delete the old auxillary data from ASDF
+        del self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+            tr_id.replace(".", "_")]
+
+        data_type = "ArrivalData"
+        data_path = self.select_quake["event_id"] + "/" + tr_id.replace(".", "_")
+
+
+        # now add updated aux data back in
+        self.ds.add_auxiliary_data(data=temp_arrival_aux.data,
+                                   data_type=data_type,
+                                   path=data_path,
+                                   parameters=temp_arrival_aux.parameters)
+
+
         print('.....')
-        print(arrival_aux)
+        print(temp_arrival_aux)
+        print('.....')
+        print(self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+            tr_id.replace(".", "_")])
 
 
         self.st[self.active_tr_index].stats[arr_name.lower()] = temp_timestamp
@@ -2189,7 +2215,8 @@ class Window(QtGui.QMainWindow):
             (self._state["waveform_plots"][self.active_tr_index], self.active_tr_index))
 
 
-        #
+        #re run the auxillary data view
+        self.build_auxillary_tree_view()
 
 
 
