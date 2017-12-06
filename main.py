@@ -2263,6 +2263,7 @@ class Window(QtGui.QMainWindow):
             elif mod_key_query:
                 arr_name = self.modifier_key
                 self.ASDF_arrival_picker(arr_name, temp_timestamp)
+                self.modifier_key = ""
 
     def ASDF_arrival_picker(self, arr_name, arr_timestamp):
         """
@@ -2279,6 +2280,8 @@ class Window(QtGui.QMainWindow):
         self.select_quake = self.cat_df.loc[row_index]
         # print(self.select_quake)
         print(self.select_quake["event_id"])
+
+
 
         tr_id = self._state["station_id"][self.active_tr_index]
 
@@ -2316,15 +2319,149 @@ class Window(QtGui.QMainWindow):
         print(self.st[self.active_tr_index])
 
         # print(self.st[self.active_tr_index].stats)
-        self.waveform_plot_interact()
 
         # set the modification tracker to True
         self.arrivals_modified = True
+
+        # call method to draw arrivals
+        self.waveform_plot_interact()
+
+        # open up a dialog to ask user if they want to duplicate pick to any other networks/stations etc...
+        duplicate_arrival_msg = "Would you like to duplicate this Arrival to other components?"
+        reply = QtGui.QMessageBox.question(self, 'Duplicate Arrival Message',
+                                           duplicate_arrival_msg, QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+        if reply == QtGui.QMessageBox.Yes:
+            chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
+            # print(chan_list)
+            # print(chan_list[0])
+
+            # print(self.db.is_chan_related(chan=chan_list[0], net=tr_id.split(".")[0], sta=tr_id.split(".")[1], loc=tr_id.split(".")[2]))
+            # print(self.db.is_chan_related(chan="ZZZ", net=tr_id.split(".")[0], sta=tr_id.split(".")[1],
+            #                     loc=tr_id.split(".")[2]))
+
+            for chan in chan_list:
+                # check if the channel relates
+                query_chan_relation = self.db.is_chan_related(chan=chan, net=tr_id.split(".")[0], sta=tr_id.split(".")[1], loc=tr_id.split(".")[2])
+
+                if query_chan_relation:
+                    print("modifying channel: ",chan)
+                    # channel is related
+                    # modify arrival
+                    other_tr_id = tr_id.replace(tr_id.split(".")[3], chan)
+                    print(other_tr_id)
+
+                    # delete the old auxillary data from ASDF
+                    del self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+                        other_tr_id.replace(".", "_")]
+
+                    data_type = "ArrivalData"
+                    data_path = self.select_quake["event_id"] + "/" + other_tr_id.replace(".", "_")
+
+                    # now add updated aux data back in
+                    self.ds.add_auxiliary_data(data=temp_arrival_aux.data,
+                                               data_type=data_type,
+                                               path=data_path,
+                                               parameters=temp_arrival_aux.parameters)
+
+                    # print('.....')
+                    # print(temp_arrival_aux)
+                    print('.....')
+                    print(self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+                              other_tr_id.replace(".", "_")])
+
+                    self.st.select(id=other_tr_id)[0].stats[arr_name.lower()] = arr_timestamp
+
+                    print(self.st.select(id=other_tr_id)[0].stats)
+
+                    # print(self.st[self.active_tr_index].stats)
+
+        self.waveform_plot_reset_all()
+
+
+
+        # TODO: Modify so that the user can propogate the pick to any other net/stn/chan/locs
+        # open up a dialog to ask user if they want to duplicate pick to any other networks/stations etc...
+        # duplicate_arrival_msg = "Would you like to duplicate this Arrival to any other Net/Stn/Chan/Loc?"
+        # reply = QtGui.QMessageBox.question(self, 'Duplicate Arrival Message',
+        #                                    duplicate_arrival_msg, QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+        #
+        # if reply == QtGui.QMessageBox.Yes:
+        #     # add/modify the picked arrival in the other net/stn/chan/locs
+        #     net_sta_list = self.ASDF_accessor[self.ds_id]['net_sta_list']
+        #
+        #     # get a list of unique networks and stations
+        #     net_list = list(set([x.split('.')[0] for x in net_sta_list]))
+        #     sta_list = [x.split('.')[1] for x in net_sta_list]
+        #
+        #     chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
+        #     tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
+        #
+        #     # open up dialog box to select stations/channels etc to extract earthquakes
+        #     sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
+        #                               tags_list=tags_list)
+        #     if sel_dlg.exec_():
+        #         select_net, select_sta, select_chan, select_tags, st, et, file_output, ref_stn_out, \
+        #         bef_quake_xt, aft_quake_xt = sel_dlg.getSelected()
 
         # self.ASDF_accessor[asdf_filename] = {"ds": ds}
 
         # re run the auxillary data view
         self.build_auxillary_tree_view()
+
+    def update_arrival_plotting(self):
+        """
+        Method to handle plotting and updating arrivals on the waveform plot
+        :return:
+        """
+        print(self.st)
+        print(self.select_quake)
+
+        for _i, tr in enumerate(self.st):
+            self.active_plot = self._state["waveform_plots"][_i]
+            self.active_tr_index = _i
+
+            arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+                tr.get_id().replace(".", "_")]
+            print(arrival_aux)
+
+            # go through arrivals in aux data parameters
+            for key in arrival_aux.parameters:
+                if not key in ["distkm", "dist_deg"]:
+                    # set up waveform plot vertical lines for arrivals
+                    temp_arr_line = pg.PlotCurveItem()
+
+                    self.active_plot.addItem(p_as_line)
+
+                    # text for P and P-as arrivals
+                    p_as_text = pg.TextItem("P_as", anchor=(1, 1), color='#ff8000')
+                    p_text = pg.TextItem("P", anchor=(1, 1), color='#40ff00')
+
+                    self.plot.addItem(p_as_text)
+                    self.plot.addItem(p_text)
+
+
+    # def get_arrival_info_for_stream(self):
+    #     """
+    #     Retreives the arrival informtion from the Auxillary data for the selected quake and inputs it into the trace stats
+    #     :return:
+    #     """
+    #
+    #     print(self.select_quake)
+    #     print(self.st)
+    #
+    #     # Iterate through traces
+    #     for tr in self.st:
+    #         arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][tr.get_id().replace(".", "_")]
+    #         print(arrival_aux)
+    #
+    #         # go through arrivals in aux data parameters and write to trace stats
+    #         for key in arrival_aux.parameters:
+    #             lwr_key = key.lower()
+    #             print(lwr_key)
+    #             if lwr_key in ["distkm", "dist_deg"]:
+    #                 tr.stats[lwr_key] = float(arrival_aux.parameters[key])
+    #             else:
+    #                 tr.stats[lwr_key] = UTCDateTime(arrival_aux.parameters[key]).timestamp
 
     def waveform_plot_mouseMoved(self, pos):
         # print("Mouse Moved in Waveform Widget")
@@ -2339,11 +2476,22 @@ class Window(QtGui.QMainWindow):
                 # set tooltip with the data coordinates
                 self.dispMousePos(pos)
 
+    def waveform_plot_reset_all(self):
+
+        for _i, plot in enumerate(self._state["waveform_plots"]):
+            print("Arrivals for: ",self._state["station_id"][_i])
+
+            self.active_plot = plot
+            self.active_tr_index = _i
+            plot.hideAxis("bottom")
+            # connect with the method to catch when waveform plot is intercated with
+            self.waveform_plot_interact()
+
     def waveform_plot_interact(self):
         # Method to catch when waveform plot is interacted with and will return the
         # interacted with plot (i.e. station) and will also resize the Arrival time vertical lines
 
-        temp_st = self.st.copy()
+        # temp_st = self.st.copy()
 
         # self.active_plot = plot_args[0]
         # self.active_tr_index = plot_args[1]
@@ -2360,7 +2508,7 @@ class Window(QtGui.QMainWindow):
 
         if not (p_line == None or p_as_line == None):
             # get the corresponding trace
-            tr = temp_st[self.active_tr_index]
+            tr = self.st[self.active_tr_index]
 
             axY = self.active_plot.getAxis('left')
 
@@ -2634,16 +2782,18 @@ class Window(QtGui.QMainWindow):
             plot.setXLink(self._state["waveform_plots"][0])
             plot.setYLink(self._state["waveform_plots"][0])
 
-        for _i, plot in enumerate(self._state["waveform_plots"]):
-            # print(_i)
-            # print(plot)
+        # for _i, plot in enumerate(self._state["waveform_plots"]):
+        #     # print(_i)
+        #     # print(plot)
+        #
+        #     self.active_plot = plot
+        #     self.active_tr_index = _i
+        #     plot.hideAxis("bottom")
+        #     # connect with the method to catch when waveform plot is intercated with
+        #     # plot.sigRangeChanged.connect(functools.partial(self.waveform_plot_interact, (plot, _i)))
+        #     self.waveform_plot_interact()
 
-            self.active_plot = plot
-            self.active_tr_index = _i
-            plot.hideAxis("bottom")
-            # connect with the method to catch when waveform plot is intercated with
-            # plot.sigRangeChanged.connect(functools.partial(self.waveform_plot_interact, (plot, _i)))
-            self.waveform_plot_interact()
+        self.waveform_plot_reset_all()
 
         # connect the waveform graph widget to the mouse moved listener
         self.waveform_graph.scene().sigMouseMoved.connect(self.waveform_plot_mouseMoved)
@@ -3651,10 +3801,19 @@ class Window(QtGui.QMainWindow):
                     arrival_aux = self.ds.auxiliary_data.ArrivalData[event_id][tr.get_id().replace(".", "_")]
                     print(arrival_aux)
 
-                    # Write info to trace header
-                    tr.stats.distance = float(arrival_aux.parameters["distkm"])
-                    tr.stats.p = UTCDateTime(arrival_aux.parameters["P"]).timestamp
-                    tr.stats.p_as = UTCDateTime(arrival_aux.parameters["P_as"]).timestamp
+                    # go through arrivals in aux data parameters and write to trace stats
+                    for key in arrival_aux.parameters:
+                        lwr_key = key.lower()
+                        print(lwr_key)
+                        if lwr_key in ["distkm", "dist_deg"]:
+                            tr.stats[lwr_key] = float(arrival_aux.parameters[key])
+                        else:
+                            tr.stats[lwr_key] = UTCDateTime(arrival_aux.parameters[key]).timestamp
+
+                    # # Write info to trace header
+                    # tr.stats.distance = float(arrival_aux.parameters["distkm"])
+                    # tr.stats.p = UTCDateTime(arrival_aux.parameters["P"]).timestamp
+                    # tr.stats.p_as = UTCDateTime(arrival_aux.parameters["P_as"]).timestamp
 
                 # Sort the st by distance from quake
                 self.st.sort(keys=['distance'])

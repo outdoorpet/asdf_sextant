@@ -300,6 +300,24 @@ class SeisDB(object):
         # print(self._json_dict[json_key])
         return (self._json_dict[json_key])
 
+    def is_chan_related(self, chan, net, sta, loc):
+        """
+        Method to test if a channel code is related to a given net/stn/tag/loc
+        :param chan: Channel Code, String
+        :param net: Network Code, String
+        :param sta: Station Code, String
+        :param sta: Location Code, String
+        :return: True/False, Bool
+        """
+        _indexed_np_array_masked = np.where(
+            (np.in1d(self._indexed_np_array['net'], net)) & (np.in1d(self._indexed_np_array['sta'], sta))
+            & (np.in1d(self._indexed_np_array['cha'], chan)) & (np.in1d(self._indexed_np_array['loc'], loc)))
+
+        _masked_np_array = self._indexed_np_array[_indexed_np_array_masked]
+
+        # returns true if there are traces in ASDF with chanel relating, or false otherwise
+        return(bool(_masked_np_array.size))
+
 
 if __name__ == "__main__":
     print "Testing db access"
