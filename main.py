@@ -1027,6 +1027,9 @@ class Window(QtGui.QMainWindow):
         # variable to keep track if arrivals have been modified or picked
         self.arrivals_modified = False
 
+        # variable to lock the details of an active plot until we are done with it
+        self.active_lock = False
+
         # add in icon for reset waveform view button
         self.ui.reset_view_push_button.setIcon(QtGui.QIcon('eLsS8.png'))
 
@@ -2213,8 +2216,13 @@ class Window(QtGui.QMainWindow):
 
     def waveform_widget_itemClicked(self, event):
 
+        print("===========+++++++++++++++++++++++++++============")
         print("dealing with mouse click")
         print("Active Plot:", self._state["station_id"][self.active_tr_index])
+        print(self.active_tr_index)
+
+        # set a lock for the selected plot and trace id until the picking is finished
+        self.active_lock = True
 
         arr_name = None
 
@@ -2265,12 +2273,15 @@ class Window(QtGui.QMainWindow):
                 self.ASDF_arrival_picker(arr_name, temp_timestamp)
                 self.modifier_key = ""
 
+        self.active_lock = False
+
     def ASDF_arrival_picker(self, arr_name, arr_timestamp):
         """
         Method to pick and save arrivals (or anything else) referneced to a specific time/station/channel etc...
         :return:
         """
 
+        print("=======================")
         print("opening arrival picker")
         # get the currently selected earthquake in the earthquake table
         row_number = self.EQtbld.tbldui.EQ_xtract_tableView.selectionModel().selectedRows()[0].row()
@@ -2314,14 +2325,16 @@ class Window(QtGui.QMainWindow):
         print(self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
                   tr_id.replace(".", "_")])
 
-        self.st[self.active_tr_index].stats[arr_name.lower()] = arr_timestamp
-
-        print(self.st[self.active_tr_index])
+        # self.st[self.active_tr_index].stats[arr_name.lower()] = arr_timestamp
+        #
+        # print(self.st[self.active_tr_index])
 
         # print(self.st[self.active_tr_index].stats)
 
         # set the modification tracker to True
         self.arrivals_modified = True
+
+        self.update_arrival_plotting()
 
         # call method to draw arrivals
         self.waveform_plot_interact()
@@ -2375,7 +2388,10 @@ class Window(QtGui.QMainWindow):
 
                     # print(self.st[self.active_tr_index].stats)
 
+        self.update_arrival_plotting()
         self.waveform_plot_reset_all()
+
+        self.active_lock = False
 
 
 
@@ -2413,31 +2429,78 @@ class Window(QtGui.QMainWindow):
         Method to handle plotting and updating arrivals on the waveform plot
         :return:
         """
+
+        # remove existing items
+        for _i in range(len(self._state["arr_lines"])):
+            for key in self._state["arr_lines"][_i]:
+                self._state["waveform_plots"][_i].removeItem(self._state["arr_lines"][_i][key])
+            for key in self._state["arr_text"][_i]:
+                self._state["waveform_plots"][_i].removeItem(self._state["arr_text"][_i][key])
+
+        self._state["arr_lines"] = []
+        self._state["arr_text"] = []
+
+        # get the currently selected earthquake in the earthquake table
+        row_number = self.EQtbld.tbldui.EQ_xtract_tableView.selectionModel().selectedRows()[0].row()
+        row_index = self.table_accessor[self.EQtbld.tbldui.EQ_xtract_tableView][1][row_number]
+
+        # get the event id
+        self.select_quake = self.cat_df.loc[row_index]
+
         print(self.st)
         print(self.select_quake)
+        print(self.select_quake["event_id"])
 
         for _i, tr in enumerate(self.st):
-            self.active_plot = self._state["waveform_plots"][_i]
-            self.active_tr_index = _i
+            print(tr)
+            print(_i)
+            tmp_plot = self._state["waveform_plots"][_i]
+            print(self._state["station_id"][_i])
 
-            arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
-                tr.get_id().replace(".", "_")]
+            arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][tr.get_id().replace(".", "_")]
             print(arrival_aux)
+
+
+            temp_arr_lines_dict = {}
+            temp_arr_text_dict = {}
 
             # go through arrivals in aux data parameters
             for key in arrival_aux.parameters:
+                print(key)
                 if not key in ["distkm", "dist_deg"]:
                     # set up waveform plot vertical lines for arrivals
-                    temp_arr_line = pg.PlotCurveItem()
+                    arr_line = pg.PlotCurveItem()
 
-                    self.active_plot.addItem(p_as_line)
 
-                    # text for P and P-as arrivals
-                    p_as_text = pg.TextItem("P_as", anchor=(1, 1), color='#ff8000')
-                    p_text = pg.TextItem("P", anchor=(1, 1), color='#40ff00')
+                    # text for arrival
+                    if key == "P_as":
+                        arr_col = '#ff8000'
+                    elif key == "P":
+                        arr_col = '#40ff00'
+                    else:
+                        arr_col = '#87CEFA'
 
-                    self.plot.addItem(p_as_text)
-                    self.plot.addItem(p_text)
+
+                    arr_text = pg.TextItem(key, anchor=(1, 1), color=arr_col)
+
+                    tmp_plot.addItem(arr_line)
+                    tmp_plot.addItem(arr_text)
+
+                    temp_arr_lines_dict[key] = arr_line
+                    temp_arr_text_dict[key] = arr_text
+
+                    print(temp_arr_lines_dict)
+                    print(temp_arr_text_dict)
+
+            self._state["arr_lines"].append(temp_arr_lines_dict)
+            self._state["arr_text"].append(temp_arr_text_dict)
+
+            print("from update_arrival_plotting")
+            print(temp_arr_lines_dict)
+            print(temp_arr_text_dict)
+
+        print("---")
+        print(self._state["arr_text"][0])
 
 
     # def get_arrival_info_for_stream(self):
@@ -2467,14 +2530,17 @@ class Window(QtGui.QMainWindow):
         # print("Mouse Moved in Waveform Widget")
 
         # find the plot the mouse is over
-        for _i, plot in enumerate(self._state["waveform_plots"]):
-            vb = plot.vb
-            if plot.sceneBoundingRect().contains(pos):
-                self.active_plot = plot
-                self.active_tr_index = _i
 
-                # set tooltip with the data coordinates
-                self.dispMousePos(pos)
+        # if there is no lock in place, then find the active plot details
+        if not self.active_lock:
+            for _i, plot in enumerate(self._state["waveform_plots"]):
+                vb = plot.vb
+                if plot.sceneBoundingRect().contains(pos):
+                    self.active_plot = plot
+                    self.active_tr_index = _i
+
+                    # set tooltip with the data coordinates
+                    self.dispMousePos(pos)
 
     def waveform_plot_reset_all(self):
 
@@ -2484,7 +2550,7 @@ class Window(QtGui.QMainWindow):
             self.active_plot = plot
             self.active_tr_index = _i
             plot.hideAxis("bottom")
-            # connect with the method to catch when waveform plot is intercated with
+            # connect with the method to catch when waveform plot is interacated with
             self.waveform_plot_interact()
 
     def waveform_plot_interact(self):
@@ -2501,28 +2567,56 @@ class Window(QtGui.QMainWindow):
         # # when mouse is clicked with modifer then open picker
         # self.active_plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
 
-        p_line = self._state["p_lines"][self.active_tr_index]
-        p_as_line = self._state["p_as_lines"][self.active_tr_index]
-        p_text = self._state["p_text"][self.active_tr_index]
-        p_as_text = self._state["p_as_text"][self.active_tr_index]
 
-        if not (p_line == None or p_as_line == None):
-            # get the corresponding trace
-            tr = self.st[self.active_tr_index]
+        temp_arr_lines_dict = self._state["arr_lines"][self.active_tr_index]
+        temp_arr_text_dict = self._state["arr_text"][self.active_tr_index]
+
+
+        # get the aux data for the active trace
+        tr = self.st[self.active_tr_index]
+
+        arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+            tr.get_id().replace(".", "_")]
+
+        print("from waveform_plot_interact")
+        print(self._state["arr_text"])
+        print(self.active_tr_index)
+        print(self.active_lock)
+        print(temp_arr_text_dict)
+        print(arrival_aux)
+
+        # p_line = self._state["p_lines"][self.active_tr_index]
+        # p_as_line = self._state["p_as_lines"][self.active_tr_index]
+        # p_text = self._state["p_text"][self.active_tr_index]
+        # p_as_text = self._state["p_as_text"][self.active_tr_index]
+
+
+        # go through every arrival
+        for key in temp_arr_lines_dict:
+
+            print(key)
+            arr_line = temp_arr_lines_dict[key]
+            arr_text = temp_arr_text_dict[key]
 
             axY = self.active_plot.getAxis('left')
 
-            p_as_line.setData(np.array([tr.stats.p_as, tr.stats.p_as]),
+            # color for arrival line
+            if key == "P_as":
+                arr_col = '#ff8000'
+            elif key == "P":
+                arr_col = '#40ff00'
+            else:
+                arr_col = '#87CEFA'
+
+            arr_timestamp = UTCDateTime(arrival_aux.parameters[key]).timestamp
+            print(arr_timestamp)
+
+            arr_line.setData(np.array([arr_timestamp, arr_timestamp]),
                               np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
                                         axY.range[1] - 0.05 * (axY.range[1] - axY.range[0])]),
-                              pen=pg.mkPen({'color': '#ff8000', 'width': 1}))
-            p_line.setData(np.array([tr.stats.p, tr.stats.p]),
-                           np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
-                                     axY.range[1] - 0.05 * (axY.range[1] - axY.range[0])]),
-                           pen=pg.mkPen({'color': '#40ff00', 'width': 1}))
+                              pen=pg.mkPen({'color': arr_col, 'width': 1}))
 
-            p_as_text.setPos(tr.stats.p_as, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
-            p_text.setPos(tr.stats.p, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
+            arr_text.setPos(arr_timestamp, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
 
     def dispMousePos(self, pos):
         # Display current mouse coords if over the scatter plot area as a tooltip
@@ -2652,6 +2746,8 @@ class Window(QtGui.QMainWindow):
         filter_settings["normalize"] = self.ui.normalize_check_box.isChecked()
         filter_settings["wavefilter"] = self.ui.waveform_filter_check_box.isChecked()
 
+
+
         temp_st = self.st.copy()
 
         if filter_settings["detrend_and_demean"]:
@@ -2685,10 +2781,13 @@ class Window(QtGui.QMainWindow):
         self._state["waveform_plots"] = []
         self._state["station_id"] = []
         self._state["station_tag"] = []
-        self._state["p_lines"] = []
-        self._state["p_as_lines"] = []
-        self._state["p_text"] = []
-        self._state["p_as_text"] = []
+        self._state["arr_lines"] = []
+        self._state["arr_text"] = []
+        # self._state["p_lines"] = []
+        # self._state["p_as_lines"] = []
+        # self._state["p_text"] = []
+        # self._state["p_as_text"] = []
+
 
         print("plotting data")
 
@@ -2716,47 +2815,47 @@ class Window(QtGui.QMainWindow):
             # self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
 
 
-            try:
+            # try:
+            #
+            #     if tr.stats.p == 0 or tr.stats.p_as == 0:
+            #         # no picks for station and earthquake
+            #         p_as_line = None
+            #         p_line = None
+            #
+            #         p_as_text = None
+            #         p_text = None
+            #
+            #     else:
+            #
+            #         # plot vertical lines for P theroetical and P-picked arrival
+            #         p_as_line = pg.PlotCurveItem()
+            #         p_line = pg.PlotCurveItem()
+            #
+            #         self.plot.addItem(p_as_line)
+            #         self.plot.addItem(p_line)
+            #
+            #         # text for P and P-as arrivals
+            #         p_as_text = pg.TextItem("P_as", anchor=(1, 1), color='#ff8000')
+            #         p_text = pg.TextItem("P", anchor=(1, 1), color='#40ff00')
+            #
+            #         self.plot.addItem(p_as_text)
+            #         self.plot.addItem(p_text)
+            # except AttributeError:
+            #     # the is no p arrival time in the ASDF auxillary data
+            #     p_as_line = None
+            #     p_line = None
+            #
+            #     p_as_text = None
+            #     p_text = None
 
-                if tr.stats.p == 0 or tr.stats.p_as == 0:
-                    # no picks for station and earthquake
-                    p_as_line = None
-                    p_line = None
+            # self._state["p_lines"].append(p_line)
+            # self._state["p_as_lines"].append(p_as_line)
+            #
+            # self._state["p_text"].append(p_text)
+            # self._state["p_as_text"].append(p_as_text)
 
-                    p_as_text = None
-                    p_text = None
-
-                else:
-
-                    # plot vertical lines for P theroetical and P-picked arrival
-                    p_as_line = pg.PlotCurveItem()
-                    p_line = pg.PlotCurveItem()
-
-                    self.plot.addItem(p_as_line)
-                    self.plot.addItem(p_line)
-
-                    # text for P and P-as arrivals
-                    p_as_text = pg.TextItem("P_as", anchor=(1, 1), color='#ff8000')
-                    p_text = pg.TextItem("P", anchor=(1, 1), color='#40ff00')
-
-                    self.plot.addItem(p_as_text)
-                    self.plot.addItem(p_text)
-            except AttributeError:
-                # the is no p arrival time in the ASDF auxillary data
-                p_as_line = None
-                p_line = None
-
-                p_as_text = None
-                p_text = None
-
-            self._state["p_lines"].append(p_line)
-            self._state["p_as_lines"].append(p_as_line)
-
-            self._state["p_text"].append(p_text)
-            self._state["p_as_text"].append(p_as_text)
-
-            vLine = pg.InfiniteLine(angle=90, movable=True)
-            self.plot.addItem(vLine, ignoreBounds=True)
+            # vLine = pg.InfiniteLine(angle=90, movable=True)
+            # self.plot.addItem(vLine, ignoreBounds=True)
 
             # when mouse is clicked with modifer then open picker
             # self.plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
@@ -2765,6 +2864,11 @@ class Window(QtGui.QMainWindow):
             # self.plot.sigRangeChanged.connect(functools.partial(self.waveform_plot_interact, (self.plot, _i)))
 
             # self.plot.scene().HoverEvent.connect(self.waveform_plot_hovered)
+
+
+        # check if the dataset has arrivaldata in the auxillary info
+        if hasattr(self.ds.auxiliary_data, "ArrivalData"):
+            self.update_arrival_plotting()
 
         self.waveform_graph.setNumberPlots(len(temp_st))
 
@@ -3808,7 +3912,8 @@ class Window(QtGui.QMainWindow):
                         if lwr_key in ["distkm", "dist_deg"]:
                             tr.stats[lwr_key] = float(arrival_aux.parameters[key])
                         else:
-                            tr.stats[lwr_key] = UTCDateTime(arrival_aux.parameters[key]).timestamp
+                            pass
+                            # tr.stats[lwr_key] = UTCDateTime(arrival_aux.parameters[key]).timestamp
 
                     # # Write info to trace header
                     # tr.stats.distance = float(arrival_aux.parameters["distkm"])
@@ -3816,7 +3921,7 @@ class Window(QtGui.QMainWindow):
                     # tr.stats.p_as = UTCDateTime(arrival_aux.parameters["P_as"]).timestamp
 
                 # Sort the st by distance from quake
-                self.st.sort(keys=['distance'])
+                self.st.sort(keys=["distkm"])
 
                 self.update_waveform_plot()
 
