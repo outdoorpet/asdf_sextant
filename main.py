@@ -2238,22 +2238,18 @@ class Window(QtGui.QMainWindow):
 
             if (shift_query and not mod_key_query) or scroll_btn_query:
                 # pop up text box for the name of the arrival
-                (arr_name, execution) = QtGui.QInputDialog.getText(self, "Arrival Picker Input", "Arrival Name",
+                arr_name, ok = QtGui.QInputDialog.getText(self, "Arrival Picker Input", "Arrival Name",
                                                                    QtGui.QLineEdit.Normal, "TestArrival")
-
-                arr_name = str(arr_name)
-                print("shift and no other mod")
+                if ok:
+                    arr_name = str(arr_name)
+                    self.ASDF_arrival_picker(arr_name, temp_timestamp)
 
             elif mod_key_query:
-                print("modifier")
-
                 arr_name = self.modifier_key
-                print(arr_name)
-            else:
-                print("Normal Click")
+                self.ASDF_arrival_picker(arr_name, temp_timestamp)
 
-            print(arr_name)
-            self.ASDF_arrival_picker(arr_name, temp_timestamp)
+
+
 
     def ASDF_arrival_picker(self, arr_name, arr_timestamp):
         """
