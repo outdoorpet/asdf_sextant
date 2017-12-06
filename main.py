@@ -1024,6 +1024,9 @@ class Window(QtGui.QMainWindow):
         # set up tuple for keys pressed
         self.modifier_key = ""
 
+        # variable to keep track if arrivals have been modified or picked
+        self.arrivals_modified = False
+
         # add in icon for reset waveform view button
         self.ui.reset_view_push_button.setIcon(QtGui.QIcon('eLsS8.png'))
 
@@ -1121,12 +1124,25 @@ class Window(QtGui.QMainWindow):
     def closeEvent(self, QCloseEvent):
         # necessary to ensure data is written into ASDF file
         try:
-            print("Closing and saving ASDF data")
-            # close all datasets
-            for value in self.ASDF_accessor.values():
-                print(value["ds"].auxiliary_data.ArrivalData["10450330"].OA_CD28_0M_HHZ)
-                print(value["ds"])
-                del value["ds"]
+
+            # check if asdf files have been modified and if so ask weather to save
+            if self.arrivals_modified:
+                quit_msg = "ASDF files have been modified.\nDo you want to SAVE?"
+                reply = QtGui.QMessageBox.question(self, 'Save Message',
+                                                   quit_msg, QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+
+                if reply == QtGui.QMessageBox.Yes:
+                    print("Closing and saving ASDF data")
+                    # close all datasets
+                    for value in self.ASDF_accessor.values():
+                        # print(value["ds"].auxiliary_data.ArrivalData["10408504"]["OA_CD27_0M_HHZ"])
+                        # print(value["ds"])
+                        del value["ds"]
+
+                    del self.ds
+                else:
+                    pass
+
         except AttributeError:
             # there is no loaded in ASDF data
             pass
@@ -1151,7 +1167,7 @@ class Window(QtGui.QMainWindow):
         self.ui.waveform_filter_settings_toolButton.released.connect(self.waveform_filter_settings)
 
         # picker tool
-        self.ui.pick_arrivals_tool_button.released.connect(self.ASDF_arrival_picker)
+        # self.ui.pick_arrivals_tool_button.released.connect(self.ASDF_arrival_picker)
 
         self.ui.station_view.itemEntered.connect(
             self.on_station_view_itemEntered)
@@ -2248,9 +2264,6 @@ class Window(QtGui.QMainWindow):
                 arr_name = self.modifier_key
                 self.ASDF_arrival_picker(arr_name, temp_timestamp)
 
-
-
-
     def ASDF_arrival_picker(self, arr_name, arr_timestamp):
         """
         Method to pick and save arrivals (or anything else) referneced to a specific time/station/channel etc...
@@ -2304,6 +2317,9 @@ class Window(QtGui.QMainWindow):
 
         # print(self.st[self.active_tr_index].stats)
         self.waveform_plot_interact()
+
+        # set the modification tracker to True
+        self.arrivals_modified = True
 
         # self.ASDF_accessor[asdf_filename] = {"ds": ds}
 
@@ -2479,7 +2495,7 @@ class Window(QtGui.QMainWindow):
         self.ui.detrend_and_demean_check_box.setEnabled(True)
         self.ui.waveform_filter_check_box.setEnabled(True)
         self.ui.waveform_filter_settings_toolButton.setEnabled(True)
-        self.ui.pick_arrivals_tool_button.setEnabled(True)
+        # self.ui.pick_arrivals_tool_button.setEnabled(True)
 
         # Get the filter settings.
         filter_settings = {}
@@ -3539,28 +3555,6 @@ class Window(QtGui.QMainWindow):
         tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
 
         return (net_list, sta_list, chan_list, tags_list)
-
-    # def calculate_RF(self, event_obj):
-    #     """
-    #     Method to calculate receiver function for the earthquake
-    #     :param event_obj:
-    #     :return:
-    #     """
-    #
-    #     # Get event catalogue
-    #     self.event_cat = self.ds.events
-    #
-    #     print(event_obj)
-    #
-    #     event_id = str(event_obj.resource_id.id).split('=')[1]
-    #
-    #     net_list, sta_list, chan_list, tags_list = self.get_associated_stations_for_quake(event_id)
-    #
-    #     # Launch the custom station/component selection dialog
-    #     sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
-    #                               tags_list=tags_list)
-    #     if sel_dlg.exec_():
-    #         select_net, select_sta, select_chan, select_tags = sel_dlg.getSelected()
 
     def calculate_RF(self, event_obj):
         # Get event catalogue

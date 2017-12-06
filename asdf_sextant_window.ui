@@ -190,16 +190,6 @@
              </widget>
             </item>
             <item>
-             <widget class="QToolButton" name="pick_arrivals_tool_button">
-              <property name="enabled">
-               <bool>false</bool>
-              </property>
-              <property name="text">
-               <string>PickArrivals</string>
-              </property>
-             </widget>
-            </item>
-            <item>
              <spacer name="horizontalSpacer_2">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
