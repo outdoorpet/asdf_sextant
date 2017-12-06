@@ -53,7 +53,6 @@ from MyMultiPlotWidget import MyMultiPlotWidget
 from asdf_rf_calc_MPI import asdf_rf_calc
 from clean_rf_output import clean_rf_ds
 
-
 # TODO: Add in ability to multiplot in auxillary data view
 # TODO: add in scroll bar to plot window when there are too many plots (like QC_P_time_compare)
 # TODO: fix Mac OS QMenu bar (currnetly the app needs to be de-focussed and focussed to make the menu bar work)
@@ -178,7 +177,8 @@ class TraceTableDialog(QtGui.QDialog):
     """
       Class to create a separate child window to display the traces for a sttaion on a table
       """
-    #TODO: add in sortable header
+
+    # TODO: add in sortable header
     def __init__(self, parent=None, trace_df=None):
         super(TraceTableDialog, self).__init__(parent)
 
@@ -244,7 +244,7 @@ class EqTableDialog(QtGui.QDialog):
 
     @QtCore.pyqtSlot(str, int)
     def onMap_marker_selected(self, event_id, row_index):
-        print(event_id,row_index)
+        print(event_id, row_index)
         # self.selected_file = os.path.basename(self.root_asdf_filename)
         # self.station_view_itemClicked(self.ASDF_accessor[self.selected_file]['file_tree_item'])
         # self.table_view_highlight(self.tbl_view_dict[str(df_id)], row_index)
@@ -265,22 +265,22 @@ class EqTableDialog(QtGui.QDialog):
                 print(js_call)
                 frame.evaluateJavaScript(js_call)
 
-    # def plot_events(self):
-    #     # Plot the events
-    #     with open('resources/map.js', 'r') as f:
-    #         frame = self.tbldui.EQ_xtract_webView.page().mainFrame()
-    #         frame.evaluateJavaScript(f.read())
-    #
-    #         for row_index, row in self.cat_df.iterrows():
-    #             js_call = "test();"
-    #             # js_call = "addEvent('{event_id}', {row_index}, " \
-    #             #           "{latitude}, {longitude}, '{a_color}', '{p_color}');" \
-    #             #     .format(event_id=row['event_id'], row_index=int(row_index), latitude=row['lat'],
-    #             #             longitude=row['lon'], a_color="Red",
-    #             #             p_color="#008000")
-    #
-    #             print(js_call)
-    #             frame.evaluateJavaScript(js_call)
+                # def plot_events(self):
+                #     # Plot the events
+                #     with open('resources/map.js', 'r') as f:
+                #         frame = self.tbldui.EQ_xtract_webView.page().mainFrame()
+                #         frame.evaluateJavaScript(f.read())
+                #
+                #         for row_index, row in self.cat_df.iterrows():
+                #             js_call = "test();"
+                #             # js_call = "addEvent('{event_id}', {row_index}, " \
+                #             #           "{latitude}, {longitude}, '{a_color}', '{p_color}');" \
+                #             #     .format(event_id=row['event_id'], row_index=int(row_index), latitude=row['lat'],
+                #             #             longitude=row['lon'], a_color="Red",
+                #             #             p_color="#008000")
+                #
+                #             print(js_call)
+                #             frame.evaluateJavaScript(js_call)
 
 
 class PickTableDialog(QtGui.QDialog):
@@ -453,8 +453,8 @@ class DataAvailPlot(QtGui.QDialog):
             x_coord = UTCDateTime(self.plot.vb.mapSceneToView(pos).toPoint().x()).ctime()
             # print(self.plot.vb.mapSceneToView(pos).toPoint().x())
             # if self.plot.vb.mapSceneToView(pos).toPoint().x() in self.cat_df["qtime"].tolist():
-                # print("QUAKE")
-                # print(self.plot.vb.mapSceneToView(pos).toPoint().x())
+            # print("QUAKE")
+            # print(self.plot.vb.mapSceneToView(pos).toPoint().x())
             self.time_tool = self.plot.setToolTip(x_coord)
         except:
             pass
@@ -555,7 +555,7 @@ class DataAvailPlot(QtGui.QDialog):
                 qline = pg.InfiniteLine(pos=qtime)
                 self.plot.addItem(qline)
 
-    #             qline.sigMouseClicked.connect(self.quake_clicked)
+    # qline.sigMouseClicked.connect(self.quake_clicked)
     #
     #
     # def quake_clicked(self, pos):
@@ -595,7 +595,7 @@ class DataAvailPlot(QtGui.QDialog):
 
                 roi_limits_dict[key.split('.')[1]] = (get_left_right_roi(bef_roi), get_left_right_roi(aft_roi))
             return (
-            self.xtract_method, self.net_list, self.sta_list, self.chan_list, self.tags_list, roi_limits_dict)
+                self.xtract_method, self.net_list, self.sta_list, self.chan_list, self.tags_list, roi_limits_dict)
         else:
             # no extraction region
             return None
@@ -692,8 +692,6 @@ class selectionDialog(QtGui.QDialog):
 
             self.chan_model.appendRow(item)
 
-
-
         self.selui.ChanListView.setModel(self.chan_model)
 
         # -------- add ASDF tags to tags select items
@@ -714,7 +712,7 @@ class selectionDialog(QtGui.QDialog):
             self.selui.ChanListView.clicked.connect(self.single_sel_chan)
             self.selui.TagsListView.clicked.connect(self.single_sel_tags)
 
-    def single_sel_tags(self,index):
+    def single_sel_tags(self, index):
         """
         Uncheck all other channels except for one that was clicked on if we are analysing station availability
         We only want to look at the availability of one station at a time
@@ -727,15 +725,14 @@ class selectionDialog(QtGui.QDialog):
                 self.tags_model.item(i).setCheckState(QtCore.Qt.Unchecked)
             i += 1
 
-
-    def single_sel_chan(self,index):
+    def single_sel_chan(self, index):
         """
         Uncheck all other channels except for one that was clicked on if we are analysing station availability
         We only want to look at the availability of one station at a time
         :return:
         """
 
-        i=0
+        i = 0
         while self.chan_model.item(i):
             if not self.chan_model.item(i).text() == index.data().toString():
                 self.chan_model.item(i).setCheckState(QtCore.Qt.Unchecked)
@@ -802,8 +799,8 @@ class selectionDialog(QtGui.QDialog):
                     UTCDateTime(self.selui.starttime.dateTime().toPyDateTime()),
                     UTCDateTime(self.selui.endtime.dateTime().toPyDateTime()),
                     self.selui.asdf_output_checkBox.isChecked(),
-                    self.selui.refstn_output_checkBox.isChecked(), self.selui.bef_quake_spinBox.value()*60,
-                    self.selui.aft_quake_spinBox.value()*60)
+                    self.selui.refstn_output_checkBox.isChecked(), self.selui.bef_quake_spinBox.value() * 60,
+                    self.selui.aft_quake_spinBox.value() * 60)
 
 
 class MyFilterTableModel(QtCore.QAbstractTableModel):
@@ -829,7 +826,6 @@ class MyFilterTableModel(QtCore.QAbstractTableModel):
         self.arraydata[index.row()][index.column()] = value
         return True
 
-
     def flags(self, index):
         if not index.isValid():
             return None
@@ -851,7 +847,7 @@ class FilterDialog(QtGui.QDialog):
 
         # populate filter types
         filter_type_list = ["bandpass", "bandstop", "highpass",
-                        "lowpass", "lowpass_cheby_2"]
+                            "lowpass", "lowpass_cheby_2"]
 
         self.filter_type_model = QtGui.QStandardItemModel(self.filui.filter_type_listView)
 
@@ -861,7 +857,6 @@ class FilterDialog(QtGui.QDialog):
             self.filter_type_model.appendRow(item)
 
         self.filui.filter_type_listView.setModel(self.filter_type_model)
-
 
     @QtCore.pyqtSlot(QtCore.QModelIndex)
     def on_filter_type_listView_clicked(self, index):
@@ -890,27 +885,18 @@ class FilterDialog(QtGui.QDialog):
                 new_args_list.append(args_list[i])
                 new_def_list.append(defaults_list[i])
 
-
-
-
-
         self.args_array = np.array([new_args_list, new_def_list]).transpose()
 
         if not self.args_array.shape[0] == 0:
-
             self.build_args_table()
 
     def build_args_table(self):
         self.tablemodel = MyFilterTableModel(self.args_array, self)
         self.filui.filter_args_tableView.setModel(self.tablemodel)
 
-
-
     def get_arguments(self):
         ret_args = []
         params = []
-
-
 
         if not self.args_array.shape[0] == 0:
             # get the argument values from the table
@@ -924,7 +910,6 @@ class FilterDialog(QtGui.QDialog):
                         iter_arg = str(self.tablemodel.data(index, QtCore.Qt.DisplayRole).toFloat())
                     except AttributeError:
                         iter_arg = str(self.tablemodel.data(index, QtCore.Qt.DisplayRole))
-
 
                 if iter_arg in ["false", "true", "True", "False"]:
                     iter_arg = strtobool(iter_arg)
@@ -1033,6 +1018,8 @@ class Window(QtGui.QMainWindow):
         # set up dictionary for different ASDF files and associated attributes/items
         self.ASDF_accessor = {}
 
+        # set up dictioanry to access any tables in seperate windows
+        self.table_accessor = {}
 
         # set up tuple for keys pressed
         self.modifier_key = ""
@@ -1050,12 +1037,10 @@ class Window(QtGui.QMainWindow):
         self.ui.normalize_check_box.setEnabled(False)
         self.ui.waveform_filter_check_box.setEnabled(False)
 
-
         # disable buttons in the p-time-analysis tab
         self.ui.sort_drop_down_button_2.setEnabled(False)
         self.ui.plot_single_stn_button.setEnabled(False)
         self.ui.gather_events_checkbox.setEnabled(False)
-
 
         # color bar for p-time analysis
         self.ui.col_grad_w.loadPreset('spectrum')
@@ -1071,7 +1056,6 @@ class Window(QtGui.QMainWindow):
         self.ui.pick_reset_view_button.setIcon(QtGui.QIcon('eLsS8.png'))
         self.ui.pick_reset_view_button.released.connect(self.reset_plot_view)
         self.ui.pick_reset_view_button.setToolTip("Reset the scatter plot zoom and sort method")
-
 
         # Open StreetMAP for station map in p-time-analysis tab
         station_map_cache = QtNetwork.QNetworkDiskCache()
@@ -1137,8 +1121,11 @@ class Window(QtGui.QMainWindow):
     def closeEvent(self, QCloseEvent):
         # necessary to ensure data is written into ASDF file
         try:
+            print("Closing and saving ASDF data")
             # close all datasets
             for value in self.ASDF_accessor.values():
+                print(value["ds"].auxiliary_data.ArrivalData["10450330"].OA_CD28_0M_HHZ)
+                print(value["ds"])
                 del value["ds"]
         except AttributeError:
             # there is no loaded in ASDF data
@@ -1194,7 +1181,7 @@ class Window(QtGui.QMainWindow):
                 pass
 
     def build_pick_tables(self):
-        self.table_accessor = None
+        # self.table_accessor = None
 
         if self.ui.gather_events_checkbox.isChecked():
             # drop some columns from the dataframes
@@ -1221,29 +1208,32 @@ class Window(QtGui.QMainWindow):
 
         dropped_cat_df[['Q_time_str', 'julday']] = dropped_cat_df.apply(mk_cat_UTC_str, axis=1)
 
-        self.tbld = PickTableDialog(parent=self, cat_df=dropped_cat_df, pick_df=dropped_picks_df)
+        self.picktbld = PickTableDialog(parent=self, cat_df=dropped_cat_df, pick_df=dropped_picks_df)
 
         # make pick table right clickable for plotting single station
-        self.tbld.pick_table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.tbld.pick_table_view.customContextMenuRequested.connect(self.pick_tbl_view_popup)
+        self.picktbld.pick_table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.picktbld.pick_table_view.customContextMenuRequested.connect(self.pick_tbl_view_popup)
 
         # make event table right clickable for sorting pick plot
-        self.tbld.cat_event_table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.tbld.cat_event_table_view.customContextMenuRequested.connect(self.pick_tbl_view_popup)
+        self.picktbld.cat_event_table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.picktbld.cat_event_table_view.customContextMenuRequested.connect(self.pick_tbl_view_popup)
 
         # Lookup Dictionary for table views
-        self.tbl_view_dict = {"cat": self.tbld.cat_event_table_view, "picks": self.tbld.pick_table_view}
+        self.tbl_view_dict = {"cat": self.picktbld.cat_event_table_view, "picks": self.picktbld.pick_table_view}
 
         # Create a new table_accefssor dictionary for this class
-        self.table_accessor = {self.tbld.cat_event_table_view: [dropped_cat_df, range(0, len(dropped_cat_df))],
-                               self.tbld.pick_table_view: [dropped_picks_df, range(0, len(dropped_picks_df))]}
+        # self.table_accessor = {self.picktbld.cat_event_table_view: [dropped_cat_df, range(0, len(dropped_cat_df))],
+        #                        self.picktbld.pick_table_view: [dropped_picks_df, range(0, len(dropped_picks_df))]}
 
-        self.tbld.cat_event_table_view.clicked.connect(self.pick_table_view_clicked)
-        self.tbld.pick_table_view.clicked.connect(self.pick_table_view_clicked)
+        self.table_accessor[self.picktbld.cat_event_table_view] = [dropped_cat_df, range(0, len(dropped_cat_df))]
+        self.table_accessor[self.picktbld.pick_table_view] = [dropped_picks_df, range(0, len(dropped_picks_df))]
+
+        self.picktbld.cat_event_table_view.clicked.connect(self.pick_table_view_clicked)
+        self.picktbld.pick_table_view.clicked.connect(self.pick_table_view_clicked)
 
         # If headers are clicked then sort
-        self.tbld.cat_event_table_view.horizontalHeader().sectionClicked.connect(self.pick_headerClicked)
-        self.tbld.pick_table_view.horizontalHeader().sectionClicked.connect(self.pick_headerClicked)
+        self.picktbld.cat_event_table_view.horizontalHeader().sectionClicked.connect(self.pick_headerClicked)
+        self.picktbld.pick_table_view.horizontalHeader().sectionClicked.connect(self.pick_headerClicked)
 
     def scatter_point_deselect(self):
         try:
@@ -1271,7 +1261,7 @@ class Window(QtGui.QMainWindow):
 
         # if there is a catalogue loaded in attempt to highlight it on the list
         try:
-            self.pick_table_view_highlight(self.tbld.pick_table_view, pick_row_index)
+            self.pick_table_view_highlight(self.picktbld.pick_table_view, pick_row_index)
         except AttributeError:
             print('Error: No Earthquake Catalogue is Loaded')
             pass
@@ -1300,7 +1290,7 @@ class Window(QtGui.QMainWindow):
         row_number = focus_widget.selectionModel().selectedRows()[0].row()
         row_index = self.table_accessor[focus_widget][1][row_number]
 
-        if focus_widget == self.tbld.cat_event_table_view:
+        if focus_widget == self.picktbld.cat_event_table_view:
             selected_row = self.cat_df.loc[row_index]
 
             rc_menu = QtGui.QMenu(self)
@@ -1315,13 +1305,13 @@ class Window(QtGui.QMainWindow):
 
             rc_menu.addSeparator()
 
-            #now add tools to display waveforms for given event
+            # now add tools to display waveforms for given event
             rc_menu.addAction('Display Waveforms for Event', functools.partial(
                 self.initialise_waveform_plot, (selected_row, "event")))
 
             rc_menu.popup(QtGui.QCursor.pos())
 
-        elif focus_widget == self.tbld.pick_table_view:
+        elif focus_widget == self.picktbld.pick_table_view:
 
             selected_row = self.picks_df.loc[row_index]
 
@@ -1339,8 +1329,8 @@ class Window(QtGui.QMainWindow):
 
     def pick_table_view_highlight(self, focus_widget, row_index):
 
-        if focus_widget == self.tbld.cat_event_table_view:
-            self.tbld.pick_table_view.clearSelection()
+        if focus_widget == self.picktbld.cat_event_table_view:
+            self.picktbld.pick_table_view.clearSelection()
             self.selected_row = self.asdf_cat_df.loc[row_index]
 
             # Find the row_number of this index
@@ -1352,7 +1342,7 @@ class Window(QtGui.QMainWindow):
             self.ui.map_view_station.page().mainFrame().evaluateJavaScript(js_call)
             self.ui.map_view_events.page().mainFrame().evaluateJavaScript(js_call)
 
-        elif focus_widget == self.tbld.pick_table_view:
+        elif focus_widget == self.picktbld.pick_table_view:
             self.selected_row = self.picks_df.loc[row_index]
 
             # Select the point on the scatter plot
@@ -1366,8 +1356,8 @@ class Window(QtGui.QMainWindow):
             cat_row_index = self.asdf_cat_df[self.asdf_cat_df['event_id'] == pick_tbl_event_id].index.tolist()[0]
 
             # Find the row_number of this index on the earthquake cat table
-            cat_row_number = self.table_accessor[self.tbld.cat_event_table_view][1].index(cat_row_index)
-            self.tbld.cat_event_table_view.selectRow(cat_row_number)
+            cat_row_number = self.table_accessor[self.picktbld.cat_event_table_view][1].index(cat_row_index)
+            self.picktbld.cat_event_table_view.selectRow(cat_row_number)
 
             # Highlight the event and station marker on the map
             js_call = "highlightEvent('{event_id}');".format(event_id=self.selected_row['pick_event_id'])
@@ -1390,9 +1380,9 @@ class Window(QtGui.QMainWindow):
 
         self.table_accessor[focus_widget][1] = table_df.index.tolist()
 
-        if focus_widget == self.tbld.cat_event_table_view:
+        if focus_widget == self.picktbld.cat_event_table_view:
             self.model = PandasModel(table_df, cat_nm=True)
-        elif focus_widget == self.tbld.pick_table_view:
+        elif focus_widget == self.picktbld.pick_table_view:
             self.model = PandasModel(table_df, pick_nm=True)
 
         focus_widget.setModel(self.model)
@@ -1430,11 +1420,10 @@ class Window(QtGui.QMainWindow):
                 magnitude = None
 
             self.asdf_cat_df.loc[_i] = [str(event.resource_id.id).split('=')[1], int(origin_info.time.timestamp),
-                                   origin_info.latitude, origin_info.longitude,
-                                   origin_info.depth / 1000, magnitude]
+                                        origin_info.latitude, origin_info.longitude,
+                                        origin_info.depth / 1000, magnitude]
 
         self.asdf_cat_df.reset_index(drop=True, inplace=True)
-
 
         # now build the eq cat and pick table
         print('------------')
@@ -1442,7 +1431,6 @@ class Window(QtGui.QMainWindow):
         self.build_pick_tables()
         self.p_time_plot_events()
         self.p_time_plot_stations()
-
 
         midpoint_list = []
         # sort the events by time:
@@ -1506,7 +1494,6 @@ class Window(QtGui.QMainWindow):
 
         print(col_dict)
 
-
         print(self.ASDF_accessor[self.ds_id]['net_sta_list'])
         net_sta_list = self.ASDF_accessor[self.ds_id]['net_sta_list']
 
@@ -1518,7 +1505,7 @@ class Window(QtGui.QMainWindow):
             # generate net_sta unique list in picks df
             unique_picks_net_sta_set = set()
             for nscl in self.picks_df["sta"]:
-                unique_picks_net_sta_set.add(nscl.split('_')[0]+"_"+nscl.split('_')[1])
+                unique_picks_net_sta_set.add(nscl.split('_')[0] + "_" + nscl.split('_')[1])
 
             unique_picks_net_sta_list = list(unique_picks_net_sta_set)
 
@@ -1526,8 +1513,9 @@ class Window(QtGui.QMainWindow):
                 col_dict[inv[0].code]
                 # create the input html string for the passive icon
                 in_html = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" style="margin: 0 auto; width: 20px; ' \
-                          'height:20px;"><polygon style="fill:' + col_dict[inv[0].code] + '; stroke:#666666; stroke-width:2; ' \
-                          'stroke-opacity:0.5"points="0,0 20,0 10,20"/></svg>'
+                          'height:20px;"><polygon style="fill:' + col_dict[
+                              inv[0].code] + '; stroke:#666666; stroke-width:2; ' \
+                                             'stroke-opacity:0.5"points="0,0 20,0 10,20"/></svg>'
 
                 print(station_inv.code)
                 js_call = "addStation('{station_id}', {latitude}, {longitude}, '{in_html}');" \
@@ -1692,7 +1680,6 @@ class Window(QtGui.QMainWindow):
         # Also add the auxiliary data.
         # Note: it seems slow to read in all of the child information for Auxillary data
         # for now only read in child info when auxillary parent item is clicked
-
 
         items = []
         for data_type in self.ds.auxiliary_data.list():
@@ -2007,7 +1994,7 @@ class Window(QtGui.QMainWindow):
 
     def build_EQ_extract_table(self):
 
-        self.table_accessor = None
+        # self.table_accessor = None
 
         dropped_cat_df = self.cat_df
 
@@ -2018,25 +2005,27 @@ class Window(QtGui.QMainWindow):
         dropped_cat_df[['Q_time_str', 'julday']] = dropped_cat_df.apply(mk_cat_UTC_str, axis=1)
 
         # earthquake table dialog
-        self.tbld = EqTableDialog(parent=self, cat_df=dropped_cat_df)
+        self.EQtbld = EqTableDialog(parent=self, cat_df=dropped_cat_df)
 
-        self.tbld.tbldui.EQ_xtract_tableView.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.tbld.tbldui.EQ_xtract_tableView.customContextMenuRequested.connect(self.EQ_tbl_view_popup)
+        self.EQtbld.tbldui.EQ_xtract_tableView.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.EQtbld.tbldui.EQ_xtract_tableView.customContextMenuRequested.connect(self.EQ_tbl_view_popup)
 
-        #extract all or selected earthquakes
-        self.tbld.tbldui.xtract_selected_pushButton.released.connect(functools.partial(self.extract_multi_quakes, "selected"))
-        self.tbld.tbldui.xtract_all_pushButton.released.connect(functools.partial(self.extract_multi_quakes, "all"))
+        # extract all or selected earthquakes
+        self.EQtbld.tbldui.xtract_selected_pushButton.released.connect(
+            functools.partial(self.extract_multi_quakes, "selected"))
+        self.EQtbld.tbldui.xtract_all_pushButton.released.connect(functools.partial(self.extract_multi_quakes, "all"))
 
         # Lookup Dictionary for table views
-        self.tbl_view_dict = {"cat": self.tbld.tbldui.EQ_xtract_tableView}
+        self.tbl_view_dict = {"cat": self.EQtbld.tbldui.EQ_xtract_tableView}
 
         # Create a new table_accessor dictionary for this class
-        self.table_accessor = {self.tbld.tbldui.EQ_xtract_tableView: [dropped_cat_df, range(0, len(dropped_cat_df))]}
+        # self.table_accessor = {self.EQtbld.tbldui.EQ_xtract_tableView: [dropped_cat_df, range(0, len(dropped_cat_df))]}
+        self.table_accessor[self.EQtbld.tbldui.EQ_xtract_tableView] = [dropped_cat_df, range(0, len(dropped_cat_df))]
 
-        self.tbld.tbldui.EQ_xtract_tableView.clicked.connect(self.EQ_table_view_clicked)
+        self.EQtbld.tbldui.EQ_xtract_tableView.clicked.connect(self.EQ_table_view_clicked)
 
         # If headers are clicked then sort
-        self.tbld.tbldui.EQ_xtract_tableView.horizontalHeader().sectionClicked.connect(self.EQ_headerClicked)
+        self.EQtbld.tbldui.EQ_xtract_tableView.horizontalHeader().sectionClicked.connect(self.EQ_headerClicked)
 
     def EQ_headerClicked(self, logicalIndex):
         focus_widget = QtGui.QApplication.focusWidget()
@@ -2050,7 +2039,7 @@ class Window(QtGui.QMainWindow):
 
         self.table_accessor[focus_widget][1] = table_df.index.tolist()
 
-        if focus_widget == self.tbld.tbldui.EQ_xtract_tableView:
+        if focus_widget == self.EQtbld.tbldui.EQ_xtract_tableView:
             self.model = PandasModel(table_df, cat_nm=True)
 
         focus_widget.setModel(self.model)
@@ -2067,7 +2056,7 @@ class Window(QtGui.QMainWindow):
 
         cat_df = self.table_accessor[focus_widget][0]
 
-        if focus_widget == self.tbld.tbldui.EQ_xtract_tableView:
+        if focus_widget == self.EQtbld.tbldui.EQ_xtract_tableView:
             self.selected_row = cat_df.loc[row_index]
 
             # print(self.selected_row)
@@ -2078,7 +2067,7 @@ class Window(QtGui.QMainWindow):
 
             # Highlight the marker on the map
             js_call = "highlightEvent('{event_id}');".format(event_id=self.selected_row['event_id'])
-            self.tbld.tbldui.EQ_xtract_webView.page().mainFrame().evaluateJavaScript(js_call)
+            self.EQtbld.tbldui.EQ_xtract_webView.page().mainFrame().evaluateJavaScript(js_call)
 
     def on_detrend_and_demean_check_box_stateChanged(self, state):
         self.update_waveform_plot()
@@ -2103,130 +2092,6 @@ class Window(QtGui.QMainWindow):
 
     def on_waveform_filter_check_box_stateChanged(self, state):
         self.update_waveform_plot()
-
-    def keyPressEvent(self, event):
-        """
-        Overide the key press event, so that it can catch when P or S is used as a modifier during mouseclick
-        :param event:
-        :return:
-        """
-        event = event.key()
-
-        if (event == QtCore.Qt.Key_P):
-            self.modifier_key = "P_as"
-            # print("A")
-        elif (event == QtCore.Qt.Key_S):
-            self.modifier_key = "S_as"
-
-        else:
-            self.modifier_key = ""
-
-
-
-    def on_graph_itemClicked(self, event):
-
-        items = self.waveform_graph.scene().items(event.scenePos())
-        sel_plot = [x for x in items if isinstance(x, pg.PlotItem)][0]
-        pos = QtCore.QPointF(event.scenePos())
-        vb = sel_plot.vb
-
-        if sel_plot.sceneBoundingRect().contains(pos):
-            mousePoint = vb.mapSceneToView(pos)
-            temp_timestamp = mousePoint.x()
-        else:
-            return
-
-
-        if (event.modifiers() == QtCore.Qt.ShiftModifier and len(self.modifier_key)==0) or event.button() == 4:
-            # pop up text box for the name of the arrival
-            (arr_name, execution) = QtGui.QInputDialog.getText(self, "Arrival Picker Input", "Arrival Name",
-                                                           QtGui.QLineEdit.Normal, "TestArrival")
-
-
-
-            if not execution:
-                return
-
-        # elif event.modifiers() == QtCore.Qt.ShiftModifier and len(self.modifier_keys) > 0:
-        elif len(self.modifier_key) > 0:
-            arr_name = self.modifier_key
-
-        else:
-            return
-
-
-        print("++++++++++")
-
-        arr_name = str(arr_name)
-        print(arr_name)
-        
-        # get the currently selected earthquake in the earthquake table
-        row_number = self.tbld.tbldui.EQ_xtract_tableView.selectionModel().selectedRows()[0].row()
-        row_index = self.table_accessor[self.tbld.tbldui.EQ_xtract_tableView][1][row_number]
-
-        # get the event id
-        self.select_quake = self.cat_df.loc[row_index]
-        print(self.select_quake)
-        print(self.select_quake["event_id"])
-
-        tr_id = self._state["station_id"][self.active_tr_index]
-
-
-
-
-
-        # tempoaraly save the auxillary data
-        temp_arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
-            tr_id.replace(".", "_")]
-        print(temp_arrival_aux)
-
-        # update the parameters with the pick
-
-
-        temp_arrival_aux.parameters[arr_name] = str(UTCDateTime(temp_timestamp))
-
-        # delete the old auxillary data from ASDF
-        del self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
-            tr_id.replace(".", "_")]
-
-        data_type = "ArrivalData"
-        data_path = self.select_quake["event_id"] + "/" + tr_id.replace(".", "_")
-
-
-        # now add updated aux data back in
-        self.ds.add_auxiliary_data(data=temp_arrival_aux.data,
-                                   data_type=data_type,
-                                   path=data_path,
-                                   parameters=temp_arrival_aux.parameters)
-
-
-        print('.....')
-        print(temp_arrival_aux)
-        print('.....')
-        print(self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
-            tr_id.replace(".", "_")])
-
-
-        self.st[self.active_tr_index].stats[arr_name.lower()] = temp_timestamp
-
-
-        print(self.st[self.active_tr_index].stats)
-        self.waveform_plot_interact(
-            (self._state["waveform_plots"][self.active_tr_index], self.active_tr_index))
-
-
-        #re run the auxillary data view
-        self.build_auxillary_tree_view()
-
-
-
-    def ASDF_arrival_picker(self):
-        """
-        Method to pick and save arrivals (or anything else) referneced to a specific time/station/channel etc...
-        :return:
-        """
-
-        print("opening arrival picker")
 
     def gather_events_checkbox_changed(self):
         self.sort_method_selected(self.ui.sort_drop_down_button_2, ('no_sort', 'no_sort'), False)
@@ -2310,14 +2175,171 @@ class Window(QtGui.QMainWindow):
         max_v += 0.1 * y_range
         self._state["waveform_plots"][0].setYRange(min_v, max_v)
 
-    def waveform_plot_interact(self, plot_args):
+    def keyPressEvent(self, event):
+        """
+        Overide the key press event, so that it can catch when P or S is used as a modifier during mouseclick
+        :param event:
+        :return:
+        """
+
+        if event.isAutoRepeat():
+            self.modifier_key = ""
+            return
+
+        event = event.key()
+
+        if (event == QtCore.Qt.Key_P):
+            self.modifier_key = "P_as"
+        elif (event == QtCore.Qt.Key_S):
+            self.modifier_key = "S_as"
+        else:
+            self.modifier_key = ""
+
+    def waveform_widget_itemClicked(self, event):
+
+        print("dealing with mouse click")
+        print("Active Plot:", self._state["station_id"][self.active_tr_index])
+
+        arr_name = None
+
+        # items = self.waveform_graph.scene().items(event.scenePos())
+        # sel_plot = [x for x in items if isinstance(x, pg.PlotItem)][0]
+        # print(sel_plot)
+        # print(self.active_plot)
+        # pos = QtCore.QPointF(event.scenePos())
+        # vb = sel_plot.vb
+        #
+        # if sel_plot.sceneBoundingRect().contains(pos):
+        #     mousePoint = vb.mapSceneToView(pos)
+        #     temp_timestamp = mousePoint.x()
+        # else:
+        #     return
+
+        # check if there are any modifiers
+        shift_query = event.modifiers() == QtCore.Qt.ShiftModifier
+        scroll_btn_query = event.button() == 4
+        mod_key_query = len(self.modifier_key) > 0
+
+        if shift_query or scroll_btn_query or mod_key_query:
+            # get timestamp for the pick
+            pos = QtCore.QPointF(event.scenePos())
+            vb = self.active_plot.vb
+            mousePoint = vb.mapSceneToView(pos)
+            temp_timestamp = mousePoint.x()
+
+            # pos = QtCore.QPointF(event.scenePos())
+            # vb = self.active_plot.vb
+            # if self.active_plot.sceneBoundingRect().contains(pos):
+            #     print("On active plot")
+            #     mousePoint = vb.mapSceneToView(pos)
+            #     temp_timestamp = mousePoint.x()
+            # else:
+            #     print("not on active plot")
+
+            if (shift_query and not mod_key_query) or scroll_btn_query:
+                # pop up text box for the name of the arrival
+                (arr_name, execution) = QtGui.QInputDialog.getText(self, "Arrival Picker Input", "Arrival Name",
+                                                                   QtGui.QLineEdit.Normal, "TestArrival")
+
+                arr_name = str(arr_name)
+                print("shift and no other mod")
+
+            elif mod_key_query:
+                print("modifier")
+
+                arr_name = self.modifier_key
+                print(arr_name)
+            else:
+                print("Normal Click")
+
+            print(arr_name)
+            self.ASDF_arrival_picker(arr_name, temp_timestamp)
+
+    def ASDF_arrival_picker(self, arr_name, arr_timestamp):
+        """
+        Method to pick and save arrivals (or anything else) referneced to a specific time/station/channel etc...
+        :return:
+        """
+
+        print("opening arrival picker")
+        # get the currently selected earthquake in the earthquake table
+        row_number = self.EQtbld.tbldui.EQ_xtract_tableView.selectionModel().selectedRows()[0].row()
+        row_index = self.table_accessor[self.EQtbld.tbldui.EQ_xtract_tableView][1][row_number]
+
+        # get the event id
+        self.select_quake = self.cat_df.loc[row_index]
+        # print(self.select_quake)
+        print(self.select_quake["event_id"])
+
+        tr_id = self._state["station_id"][self.active_tr_index]
+
+        # tempoaraly save the auxillary data
+        temp_arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+            tr_id.replace(".", "_")]
+        # print(temp_arrival_aux)
+
+        # update the parameters with the pick
+
+
+        temp_arrival_aux.parameters[arr_name] = str(UTCDateTime(arr_timestamp))
+
+        # delete the old auxillary data from ASDF
+        del self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+            tr_id.replace(".", "_")]
+
+        data_type = "ArrivalData"
+        data_path = self.select_quake["event_id"] + "/" + tr_id.replace(".", "_")
+
+        # now add updated aux data back in
+        self.ds.add_auxiliary_data(data=temp_arrival_aux.data,
+                                   data_type=data_type,
+                                   path=data_path,
+                                   parameters=temp_arrival_aux.parameters)
+
+        # print('.....')
+        # print(temp_arrival_aux)
+        print('.....')
+        print(self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
+                  tr_id.replace(".", "_")])
+
+        self.st[self.active_tr_index].stats[arr_name.lower()] = arr_timestamp
+
+        print(self.st[self.active_tr_index])
+
+        # print(self.st[self.active_tr_index].stats)
+        self.waveform_plot_interact()
+
+        # self.ASDF_accessor[asdf_filename] = {"ds": ds}
+
+        # re run the auxillary data view
+        self.build_auxillary_tree_view()
+
+    def waveform_plot_mouseMoved(self, pos):
+        # print("Mouse Moved in Waveform Widget")
+
+        # find the plot the mouse is over
+        for _i, plot in enumerate(self._state["waveform_plots"]):
+            vb = plot.vb
+            if plot.sceneBoundingRect().contains(pos):
+                self.active_plot = plot
+                self.active_tr_index = _i
+
+                # set tooltip with the data coordinates
+                self.dispMousePos(pos)
+
+    def waveform_plot_interact(self):
         # Method to catch when waveform plot is interacted with and will return the
         # interacted with plot (i.e. station) and will also resize the Arrival time vertical lines
 
         temp_st = self.st.copy()
 
-        self.active_plot = plot_args[0]
-        self.active_tr_index = plot_args[1]
+        # self.active_plot = plot_args[0]
+        # self.active_tr_index = plot_args[1]
+
+        # print("Plot interacted with: ", self.active_plot)
+
+        # # when mouse is clicked with modifer then open picker
+        # self.active_plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
 
         p_line = self._state["p_lines"][self.active_tr_index]
         p_as_line = self._state["p_as_lines"][self.active_tr_index]
@@ -2331,26 +2353,22 @@ class Window(QtGui.QMainWindow):
             axY = self.active_plot.getAxis('left')
 
             p_as_line.setData(np.array([tr.stats.p_as, tr.stats.p_as]),
-                                   np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
-                                             axY.range[1] - 0.05 * (axY.range[1] - axY.range[0])]),
-                                   pen=pg.mkPen({'color': '#ff8000', 'width': 1}))
+                              np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
+                                        axY.range[1] - 0.05 * (axY.range[1] - axY.range[0])]),
+                              pen=pg.mkPen({'color': '#ff8000', 'width': 1}))
             p_line.setData(np.array([tr.stats.p, tr.stats.p]),
-                                np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
-                                          axY.range[1] - 0.05 * (axY.range[1] - axY.range[0])]),
-                                pen=pg.mkPen({'color': '#40ff00', 'width': 1}))
+                           np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
+                                     axY.range[1] - 0.05 * (axY.range[1] - axY.range[0])]),
+                           pen=pg.mkPen({'color': '#40ff00', 'width': 1}))
 
             p_as_text.setPos(tr.stats.p_as, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
             p_text.setPos(tr.stats.p, axY.range[0] + 0.1 * (axY.range[1] - axY.range[0]))
 
     def dispMousePos(self, pos):
         # Display current mouse coords if over the scatter plot area as a tooltip
-        try:
-            self.x_coord = UTCDateTime(self.plot.vb.mapSceneToView(pos).toPoint().x())
-            # print(self.x_coord)
-            time_tool = self.plot.setToolTip(self.x_coord.ctime())
-            pass
-        except:
-            pass
+
+        x_coord = UTCDateTime(self.active_plot.vb.mapSceneToView(pos).toPoint().x())
+        time_tool = self.active_plot.setToolTip(x_coord.ctime())
 
     def update_p_time_graph(self):
         # List of colors for individual scatter points based on the arr time residual
@@ -2378,9 +2396,9 @@ class Window(QtGui.QMainWindow):
 
             # Set up the plotting area
             self.plot = self.ui.p_graph_view.addPlot(0, 0, title="Time Difference: P Theoretical - P Picked (crosses)",
-                                                  axisItems={'bottom': DateAxisItem(orientation='bottom',
-                                                                                    utcOffset=0),
-                                                             'left': y_axis_string})
+                                                     axisItems={'bottom': DateAxisItem(orientation='bottom',
+                                                                                       utcOffset=0),
+                                                                'left': y_axis_string})
             self.plot.setMouseEnabled(x=True, y=False)
 
             # # When Mouse is moved over plot print the data coordinates
@@ -2422,7 +2440,7 @@ class Window(QtGui.QMainWindow):
 
             # Set up the plotting area
             self.plot = self.ui.p_graph_view.addPlot(0, 0, title="Time Difference: P Theoretical - P Picked (crosses)",
-                                                  axisItems={'left': y_axis_string, 'bottom': x_axis_string})
+                                                     axisItems={'left': y_axis_string, 'bottom': x_axis_string})
             self.plot.setMouseEnabled(x=True, y=False)
             self.plot.setLabel('bottom', "Event ID")
 
@@ -2476,7 +2494,6 @@ class Window(QtGui.QMainWindow):
 
         temp_st = self.st.copy()
 
-
         if filter_settings["detrend_and_demean"]:
             temp_st.detrend("linear")
             temp_st.detrend("demean")
@@ -2513,12 +2530,16 @@ class Window(QtGui.QMainWindow):
         self._state["p_text"] = []
         self._state["p_as_text"] = []
 
+        print("plotting data")
+
         for _i, tr in enumerate(temp_st):
             self.plot = self.waveform_graph.addPlot(
                 _i, 0, title=tr.id,
                 axisItems={'bottom': DateAxisItem(orientation='bottom',
                                                   utcOffset=0)})
             self.plot.show()
+
+            # print(self.plot)
             self._state["waveform_plots"].append(self.plot)
             self._state["station_id"].append(tr.stats.network + '.' +
                                              tr.stats.station + '.' +
@@ -2532,7 +2553,7 @@ class Window(QtGui.QMainWindow):
             max_values.append(tr.data.max())
 
             # When Mouse is moved over plot print the data coordinates
-            self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
+            # self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
 
 
             try:
@@ -2574,12 +2595,16 @@ class Window(QtGui.QMainWindow):
             self._state["p_text"].append(p_text)
             self._state["p_as_text"].append(p_as_text)
 
-
             vLine = pg.InfiniteLine(angle=90, movable=True)
             self.plot.addItem(vLine, ignoreBounds=True)
 
             # when mouse is clicked with modifer then open picker
-            self.plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
+            # self.plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
+
+            # connect with the method to catch when waveform plot is intercated with
+            # self.plot.sigRangeChanged.connect(functools.partial(self.waveform_plot_interact, (self.plot, _i)))
+
+            # self.plot.scene().HoverEvent.connect(self.waveform_plot_hovered)
 
         self.waveform_graph.setNumberPlots(len(temp_st))
 
@@ -2598,10 +2623,24 @@ class Window(QtGui.QMainWindow):
             plot.setYLink(self._state["waveform_plots"][0])
 
         for _i, plot in enumerate(self._state["waveform_plots"]):
+            # print(_i)
+            # print(plot)
+
+            self.active_plot = plot
+            self.active_tr_index = _i
             plot.hideAxis("bottom")
             # connect with the method to catch when waveform plot is intercated with
-            plot.sigRangeChanged.connect(functools.partial(self.waveform_plot_interact, (self.plot, _i)))
-            self.waveform_plot_interact((plot, _i))
+            # plot.sigRangeChanged.connect(functools.partial(self.waveform_plot_interact, (plot, _i)))
+            self.waveform_plot_interact()
+
+        # connect the waveform graph widget to the mouse moved listener
+        self.waveform_graph.scene().sigMouseMoved.connect(self.waveform_plot_mouseMoved)
+
+        # connect the active plot to the arrival picker if the mouse is clicked
+        self.active_plot.scene().sigMouseClicked.connect(self.waveform_widget_itemClicked)
+
+        # connect with the method to catch when waveform plot is intercated with
+        self.active_plot.sigRangeChanged.connect(self.waveform_plot_interact)
 
         self._state["waveform_plots"][-1].showAxis("bottom")
 
@@ -2930,7 +2969,6 @@ class Window(QtGui.QMainWindow):
             ph_start = str(net_st).split('.')[0]
             ph_end = str(net_st + 60 * 60).split('.')[0]
 
-
             self.net_item_menu = QtGui.QMenu(self)
             select_action = QtGui.QAction('Extract Waveforms for Channel', self)
             select_action.triggered.connect(lambda: self.extract_waveform_frm_ASDF(False,
@@ -3227,7 +3265,9 @@ class Window(QtGui.QMainWindow):
 
         # now make pandas dataframe sorted by startdate and split into information
         # create empty data frame
-        self.trace_df = pd.DataFrame(data=None, columns=['ASDF_id', 'id', 'channel', 'start_UTC', 'end_UTC', 'start_timestamp', 'end_timestamp', 'tag'])
+        self.trace_df = pd.DataFrame(data=None,
+                                     columns=['ASDF_id', 'id', 'channel', 'start_UTC', 'end_UTC', 'start_timestamp',
+                                              'end_timestamp', 'tag'])
 
         # iterate through trace_list
         for _i, trace in enumerate(trace_list):
@@ -3241,7 +3281,7 @@ class Window(QtGui.QMainWindow):
             tag = info[3]
 
             self.trace_df.loc[_i] = [trace, id, channel, UTCDateTime(start_timestamp).ctime(),
-                                 UTCDateTime(end_timestamp).ctime(), start_timestamp, end_timestamp, tag]
+                                     UTCDateTime(end_timestamp).ctime(), start_timestamp, end_timestamp, tag]
 
         self.trace_df.sort_values(by='start_UTC', inplace=True)
         self.trace_df.reset_index(drop=True, inplace=True)
@@ -3263,7 +3303,6 @@ class Window(QtGui.QMainWindow):
         st = Stream()
 
         for matched_info in query.values():
-
             # self.db.retrieve_full_db_entry(matched_info["ASDF_tag"])
 
             # read the data from the ASDF into stream
@@ -3353,8 +3392,7 @@ class Window(QtGui.QMainWindow):
                 # print(UTCDateTime(interval_tuple[1]))
 
                 print(select_net, select_sta, select_chan, select_tags, UTCDateTime(interval_tuple[0]),
-                                            UTCDateTime(interval_tuple[1]))
-
+                      UTCDateTime(interval_tuple[1]))
 
                 query = self.db.queryByTime(select_net, select_sta, select_chan, select_tags, interval_tuple[0],
                                             interval_tuple[1])
@@ -3370,24 +3408,16 @@ class Window(QtGui.QMainWindow):
             else:
                 return
 
-
-
-
-
-
         if not self.st == None:
             # add in p_arr and p_as_arrival attributes in the trace stats as 0
             for tr in self.st:
                 tr.stats.p = 0
                 tr.stats.p_as = 0
 
-
             self.update_waveform_plot()
             # Now output data into new ASDF if required
             if file_output:
                 self.initiate_output_eq_asdf()
-
-
 
                 event = self.cat[self.cat_row_index]
                 self.keys_list = []
@@ -3442,7 +3472,6 @@ class Window(QtGui.QMainWindow):
 
         self.selected_row_list = [self.cat_df.loc[x] for x in self.cat_row_index_list]
 
-
         net_sta_list = self.ASDF_accessor[self.ds_id]['net_sta_list']
 
         # get a list of unique networks and stations
@@ -3464,7 +3493,7 @@ class Window(QtGui.QMainWindow):
             self.info_list = []
 
             for _i, sel_quake in enumerate(self.selected_row_list):
-                print("Extracting Earthquake ",_i+1, " of ", len(self.cat_row_index_list))
+                print("Extracting Earthquake ", _i + 1, " of ", len(self.cat_row_index_list))
                 qtime = sel_quake['qtime']
                 event = self.cat[self.cat_row_index_list[_i]]
 
@@ -3513,7 +3542,7 @@ class Window(QtGui.QMainWindow):
 
         tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
 
-        return(net_list,sta_list,chan_list,tags_list)
+        return (net_list, sta_list, chan_list, tags_list)
 
     # def calculate_RF(self, event_obj):
     #     """
@@ -3542,8 +3571,6 @@ class Window(QtGui.QMainWindow):
         # self.event_cat = self.ds.events
 
         print(event_obj)
-
-
 
         # open up dialog of where to save rf ASDF file
         self.out_rf_filename = str(QtGui.QFileDialog.getSaveFileName(
@@ -3584,14 +3611,13 @@ class Window(QtGui.QMainWindow):
         self.select_quake = self.cat_df.loc[self.cat_df['event_id'] == event_id]
         event_row_index = self.select_quake.index.tolist()[0]
 
-        self.EQ_table_view_highlight(self.tbld.tbldui.EQ_xtract_tableView, event_row_index)
+        self.EQ_table_view_highlight(self.EQtbld.tbldui.EQ_xtract_tableView, event_row_index)
 
         net_list, sta_list, chan_list, tags_list = self.get_associated_stations_for_quake(event_id)
 
-
         # Launch the custom station/component selection dialog
         sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
-                                      tags_list=tags_list)
+                                  tags_list=tags_list)
         if sel_dlg.exec_():
             select_net, select_sta, select_chan, select_tags = sel_dlg.getSelected()
 
@@ -3616,9 +3642,8 @@ class Window(QtGui.QMainWindow):
                 # Iterate through traces
                 for tr in self.st:
                     # Run Java Script to highlight all selected stations in station view
-                    js_call = "highlightStation('{station}')".format(station=tr.stats.network + '.' +tr.stats.station)
+                    js_call = "highlightStation('{station}')".format(station=tr.stats.network + '.' + tr.stats.station)
                     self.ui.web_view.page().mainFrame().evaluateJavaScript(js_call)
-
 
                     # Get inventory for trace
                     # inv = self.ds.waveforms[tr.stats.network + '.' +tr.stats.station].StationXML
@@ -3641,10 +3666,8 @@ class Window(QtGui.QMainWindow):
                     tr.stats.p = UTCDateTime(arrival_aux.parameters["P"]).timestamp
                     tr.stats.p_as = UTCDateTime(arrival_aux.parameters["P_as"]).timestamp
 
-
                 # Sort the st by distance from quake
                 self.st.sort(keys=['distance'])
-
 
                 self.update_waveform_plot()
 
@@ -3670,7 +3693,6 @@ class Window(QtGui.QMainWindow):
         if not self.out_eq_filname:
             return
 
-
         # make correct estension
         if '.' in self.out_eq_filname:
             self.out_eq_filname = self.out_eq_filname.split(".")[0] + ".h5"
@@ -3681,14 +3703,12 @@ class Window(QtGui.QMainWindow):
         if os.path.exists(self.out_eq_filname):
             os.remove(self.out_eq_filname)
 
-
         # output json filename
         self.json_out = self.out_eq_filname.split(".")[0] + ".json"
 
         # remove if exists
         if os.path.exists(self.json_out):
             os.remove(self.json_out)
-
 
         # print(self.out_eq_filname)
 
@@ -3727,8 +3747,6 @@ class Window(QtGui.QMainWindow):
                                       maxlatitude=bb[3] + 2,
                                       level='channel')
 
-
-
         ref_data = []
 
         # go through inventory and request timeseries data
@@ -3736,8 +3754,8 @@ class Window(QtGui.QMainWindow):
             for stn in net:
                 try:
                     ref_st = client.get_waveforms(network=net.code, station=stn.code, channel='*', location='*',
-                                                   starttime=interval_tuple[0],
-                                                   endtime=interval_tuple[1])
+                                                  starttime=interval_tuple[0],
+                                                  endtime=interval_tuple[1])
 
                 except FDSNException:
                     print('No Data for Earthquake from Reference Station: ' + stn.code)
@@ -3807,7 +3825,6 @@ class Window(QtGui.QMainWindow):
                 data_type = "ArrivalData"
                 data_path = event_id + "/" + tr.get_id().replace('.', '_')
 
-
                 # add the waveforms referenced to the earthquake
                 self.out_eq_asdf.add_waveforms(tr, tag="earthquake",
                                                event_id=event)
@@ -3856,14 +3873,14 @@ class Window(QtGui.QMainWindow):
             data_type = "ArrivalData"
             data_path = event_id + "/" + tr.get_id().replace('.', '_')
 
-            if len(arrivals) ==0:
-                #there is no P arrival (i.e. earthquake is other side of earth
+            if len(arrivals) == 0:
+                # there is no P arrival (i.e. earthquake is other side of earth
                 p_time = 0
             else:
                 p_time = arrivals[0].time
 
             parameters = {"P": str(origin_info.time + p_time),
-                          "P_as": str(origin_info.time + p_time - 60*3),
+                          "P_as": str(origin_info.time + p_time - 60 * 3),
                           "distkm": dist / 1000.0,
                           "dist_deg": dist_deg}
 
@@ -3900,7 +3917,6 @@ class Window(QtGui.QMainWindow):
         chan_list = self.ASDF_accessor[self.ds_id]['channel_codes']
         tags_list = self.ASDF_accessor[self.ds_id]['tags_list']
 
-
         # open up the selection dialog for the user to select which data to display availability info
         # Launch the custom station/component selection dialog
         sel_dlg = selectionDialog(parent=self, net_list=net_list, sta_list=sta_list, chan_list=chan_list,
@@ -3913,7 +3929,8 @@ class Window(QtGui.QMainWindow):
 
                 if net_sta.split('.')[0] in select_net and net_sta.split('.')[1] in select_sta:
                     # get the recording intervals of the station for the selected channel and tag
-                    intervals_array = self.db.get_recording_intervals(net_sta.split('.')[0], net_sta.split('.')[1], select_chan[0], select_tags[0])
+                    intervals_array = self.db.get_recording_intervals(net_sta.split('.')[0], net_sta.split('.')[1],
+                                                                      select_chan[0], select_tags[0])
 
                     # intervals_no = intervals_array.shape[1]
 
@@ -3923,12 +3940,13 @@ class Window(QtGui.QMainWindow):
             if hasattr(self, "cat_df"):
 
                 self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
-                                                 chan_list=select_chan, tags_list=tags_list,
-                                                 rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
+                                                     chan_list=select_chan, tags_list=tags_list,
+                                                     rec_int_dict=self.recording_intervals, cat_avail=True,
+                                                     cat_df=self.cat_df)
             else:
                 self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
-                                                 chan_list=select_chan, tags_list=tags_list,
-                                                 rec_int_dict=self.recording_intervals)
+                                                     chan_list=select_chan, tags_list=tags_list,
+                                                     rec_int_dict=self.recording_intervals)
 
             # connect to the go button in plot
             self.data_avail_plot.davailui.go_push_button.released.connect(self.plot_intervals_selected)
@@ -4009,146 +4027,146 @@ class Window(QtGui.QMainWindow):
             #     # connect to the go button in plot
             #     self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
 
-        #
-        # # iterate through stations
-        # for _i, net_sta in enumerate(net_sta_list):
-        #     # stnxml = self.ds.waveforms[station].StationXML
-        #     # # get the start recording interval
-        #     # #  and get the end recording interval
-        #     # try:
-        #     #     rec_start = UTCDateTime(stnxml[0][0].start_date).timestamp or \
-        #     #                 UTCDateTime(stnxml[0][0].creation_date).timestamp
-        #     #     rec_end = UTCDateTime(stnxml[0][0].end_date).timestamp or \
-        #     #               UTCDateTime(stnxml[0][0].termination_date).timestamp
-        #     # except AttributeError:
-        #     #     print("No start/end dates found in XML")
-        #     #     break
-        #
-        #     # if station == "7D.CZ40":
-        #     #     print("rec_start:", UTCDateTime(rec_start))
-        #     #     print("rec_end:", UTCDateTime(rec_end))
-        #
-        #     # get the channels for that station
-        #     # xml_list = stnxml.select(channel="*Z").get_contents()['channels']
-        #
-        #     # sta = str(xml_list[0]).split('.')[1]
-        #     # chan = str(xml_list[0]).split('.')[3]
-        #
-        #     # # the auxillary data hierarchy
-        #     # data_type = "StationAvailability"
-        #     # gaps_path = station.replace('.', '_') + '/DataGaps'
-        #     # # ovlps_path = station.replace('.', '_') + '/DataOverlaps'
-        #     # rec_int_path = station.replace('.', '_') + '/RecordingIntervals'
-        #     #
-        #     # # check if there is already info in auxillary data
-        #     # try:
-        #     #     aux_gaps = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["DataGaps"].data
-        #     #     aux_rec_ints = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["RecordingIntervals"].data
-        #     # except KeyError:
-        #     #     # no gaps/interval info stored in auxillary data
-        #     #     pass
-        #     # else:
-        #     #     print("Gaps and recording interval information already in "
-        #     #           "ASDF Auxillary Data for Station: %s ....." % station)
-        #     #     self.recording_intervals[station] = aux_rec_ints
-        #     #     self.recording_gaps[station] = aux_gaps
-        #     #
-        #     #     continue
-        #
-        #     print("\r Working on Station: " + net_sta+ ", " + str(_i + 1) + " of " + \
-        #           str(len(net_sta_list)) + " Stations", )
-        #     sys.stdout.flush()
-        #
-        #     gaps_array = self.db.get_recording_intervals(net=net_sta.splitsta=net_sta.split('.')[1], chan=chan)
-        #
-        #     # if station == "7D.CZ40":
-        #     #     print("GAPS:")
-        #     #     for _i in range(len(gaps_array)):
-        #     #
-        #     #         print(UTCDateTime(gaps_array[_i, 0]), UTCDateTime(gaps_array[_i, 1]))
-        #
-        #     self.recording_gaps[station] = gaps_array
-        #
-        #     temp_start_int = []
-        #     temp_end_int = []
-        #
-        #     gaps_no = gaps_array.shape[1]
-        #
-        #     prev_endtime = ''
-        #
-        #     if gaps_no == 0:
-        #         temp_start_int.append(rec_start)
-        #         temp_end_int.append(rec_end)
-        #     else:
-        #         # populate the recording intervals dictionary
-        #         for _j in range(gaps_no):
-        #             gap_start = gaps_array[0, _j]
-        #             gap_end = gaps_array[1, _j]
-        #
-        #             if _j == 0:
-        #                 # first interval
-        #                 # print(UTCDateTime(rec_start).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
-        #                 temp_start_int.append(rec_start)
-        #                 temp_end_int.append(gap_start)
-        #                 prev_endtime = gap_end
-        #
-        #             if _j == gaps_no - 1:
-        #                 # last interval
-        #                 # print(UTCDateTime(gap_entry['gap_end']).ctime(), UTCDateTime(rec_end).ctime())
-        #                 temp_start_int.append(gap_end)
-        #                 temp_end_int.append(rec_end)
-        #
-        #             elif not _j == 0 and not _j == gaps_no - 1:
-        #                 # print(UTCDateTime(gaps_list[_j-1]['gap_end']).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
-        #                 temp_start_int.append(prev_endtime)
-        #                 temp_end_int.append(gap_start)
-        #                 prev_endtime = gap_end
-        #
-        #     # the [1] element of shape is the number of intervals
-        #     rec_int_array = np.array([temp_start_int, temp_end_int])
-        #     self.recording_intervals[station] = rec_int_array
-        #
-        #     #
-        #     # if station == "7D.CZ40":
-        #     #     print("Intervals")
-        #     #     for _i in range(rec_int_array.shape[1]):
-        #     #         print(UTCDateTime(rec_int_array[0, _i]), UTCDateTime(rec_int_array[1, _i]))
-        #
-        #
-        #
-        #     # # add the gaps into the auxillary data
-        #     # self.ds.add_auxiliary_data(data_type=data_type, path=gaps_path, data=gaps_array,
-        #     #                            parameters={"Description": "2D Numpy array with "
-        #     #                                                       "UTCDateTime Timestamps for the start/end "
-        #     #                                                       "of a gap interval"})
-        #     # self.ds.add_auxiliary_data(data_type=data_type, path=rec_int_path, data=rec_int_array,
-        #     #                            parameters={"Description": "2D Numpy array with "
-        #     #                                                       "UTCDateTime Timestamps for the start/end "
-        #     #                                                       "of a recording interval"})
-        #
-        # print("")
-        # print("\nFinished calculating station recording intervals")
-        # # print("Wrote data into ASDF auxillary information" )
-        #
-        # # self.build_auxillary_tree_view()
-        # # print(self.recording_intervals)
-        #
-        # # print("running data avail")
-        #
-        #
-        # # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
-        # if hasattr(self, "cat_df"):
-        #
-        #     self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
-        #                                      chan_list=[chan], tags_list=tags_list,
-        #                                      rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
-        # else:
-        #     self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
-        #                                      chan_list=[chan], tags_list=tags_list,
-        #                                      rec_int_dict=self.recording_intervals)
-        #
-        # # connect to the go button in plot
-        # self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
+            #
+            # # iterate through stations
+            # for _i, net_sta in enumerate(net_sta_list):
+            #     # stnxml = self.ds.waveforms[station].StationXML
+            #     # # get the start recording interval
+            #     # #  and get the end recording interval
+            #     # try:
+            #     #     rec_start = UTCDateTime(stnxml[0][0].start_date).timestamp or \
+            #     #                 UTCDateTime(stnxml[0][0].creation_date).timestamp
+            #     #     rec_end = UTCDateTime(stnxml[0][0].end_date).timestamp or \
+            #     #               UTCDateTime(stnxml[0][0].termination_date).timestamp
+            #     # except AttributeError:
+            #     #     print("No start/end dates found in XML")
+            #     #     break
+            #
+            #     # if station == "7D.CZ40":
+            #     #     print("rec_start:", UTCDateTime(rec_start))
+            #     #     print("rec_end:", UTCDateTime(rec_end))
+            #
+            #     # get the channels for that station
+            #     # xml_list = stnxml.select(channel="*Z").get_contents()['channels']
+            #
+            #     # sta = str(xml_list[0]).split('.')[1]
+            #     # chan = str(xml_list[0]).split('.')[3]
+            #
+            #     # # the auxillary data hierarchy
+            #     # data_type = "StationAvailability"
+            #     # gaps_path = station.replace('.', '_') + '/DataGaps'
+            #     # # ovlps_path = station.replace('.', '_') + '/DataOverlaps'
+            #     # rec_int_path = station.replace('.', '_') + '/RecordingIntervals'
+            #     #
+            #     # # check if there is already info in auxillary data
+            #     # try:
+            #     #     aux_gaps = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["DataGaps"].data
+            #     #     aux_rec_ints = self.ds.auxiliary_data[data_type][station.replace('.', '_')]["RecordingIntervals"].data
+            #     # except KeyError:
+            #     #     # no gaps/interval info stored in auxillary data
+            #     #     pass
+            #     # else:
+            #     #     print("Gaps and recording interval information already in "
+            #     #           "ASDF Auxillary Data for Station: %s ....." % station)
+            #     #     self.recording_intervals[station] = aux_rec_ints
+            #     #     self.recording_gaps[station] = aux_gaps
+            #     #
+            #     #     continue
+            #
+            #     print("\r Working on Station: " + net_sta+ ", " + str(_i + 1) + " of " + \
+            #           str(len(net_sta_list)) + " Stations", )
+            #     sys.stdout.flush()
+            #
+            #     gaps_array = self.db.get_recording_intervals(net=net_sta.splitsta=net_sta.split('.')[1], chan=chan)
+            #
+            #     # if station == "7D.CZ40":
+            #     #     print("GAPS:")
+            #     #     for _i in range(len(gaps_array)):
+            #     #
+            #     #         print(UTCDateTime(gaps_array[_i, 0]), UTCDateTime(gaps_array[_i, 1]))
+            #
+            #     self.recording_gaps[station] = gaps_array
+            #
+            #     temp_start_int = []
+            #     temp_end_int = []
+            #
+            #     gaps_no = gaps_array.shape[1]
+            #
+            #     prev_endtime = ''
+            #
+            #     if gaps_no == 0:
+            #         temp_start_int.append(rec_start)
+            #         temp_end_int.append(rec_end)
+            #     else:
+            #         # populate the recording intervals dictionary
+            #         for _j in range(gaps_no):
+            #             gap_start = gaps_array[0, _j]
+            #             gap_end = gaps_array[1, _j]
+            #
+            #             if _j == 0:
+            #                 # first interval
+            #                 # print(UTCDateTime(rec_start).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
+            #                 temp_start_int.append(rec_start)
+            #                 temp_end_int.append(gap_start)
+            #                 prev_endtime = gap_end
+            #
+            #             if _j == gaps_no - 1:
+            #                 # last interval
+            #                 # print(UTCDateTime(gap_entry['gap_end']).ctime(), UTCDateTime(rec_end).ctime())
+            #                 temp_start_int.append(gap_end)
+            #                 temp_end_int.append(rec_end)
+            #
+            #             elif not _j == 0 and not _j == gaps_no - 1:
+            #                 # print(UTCDateTime(gaps_list[_j-1]['gap_end']).ctime(), UTCDateTime(gap_entry['gap_start']).ctime())
+            #                 temp_start_int.append(prev_endtime)
+            #                 temp_end_int.append(gap_start)
+            #                 prev_endtime = gap_end
+            #
+            #     # the [1] element of shape is the number of intervals
+            #     rec_int_array = np.array([temp_start_int, temp_end_int])
+            #     self.recording_intervals[station] = rec_int_array
+            #
+            #     #
+            #     # if station == "7D.CZ40":
+            #     #     print("Intervals")
+            #     #     for _i in range(rec_int_array.shape[1]):
+            #     #         print(UTCDateTime(rec_int_array[0, _i]), UTCDateTime(rec_int_array[1, _i]))
+            #
+            #
+            #
+            #     # # add the gaps into the auxillary data
+            #     # self.ds.add_auxiliary_data(data_type=data_type, path=gaps_path, data=gaps_array,
+            #     #                            parameters={"Description": "2D Numpy array with "
+            #     #                                                       "UTCDateTime Timestamps for the start/end "
+            #     #                                                       "of a gap interval"})
+            #     # self.ds.add_auxiliary_data(data_type=data_type, path=rec_int_path, data=rec_int_array,
+            #     #                            parameters={"Description": "2D Numpy array with "
+            #     #                                                       "UTCDateTime Timestamps for the start/end "
+            #     #                                                       "of a recording interval"})
+            #
+            # print("")
+            # print("\nFinished calculating station recording intervals")
+            # # print("Wrote data into ASDF auxillary information" )
+            #
+            # # self.build_auxillary_tree_view()
+            # # print(self.recording_intervals)
+            #
+            # # print("running data avail")
+            #
+            #
+            # # if there is an earthquake catalogue loaded then plot the arthquakes on the station availabilty plot
+            # if hasattr(self, "cat_df"):
+            #
+            #     self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+            #                                      chan_list=[chan], tags_list=tags_list,
+            #                                      rec_int_dict=self.recording_intervals, cat_avail=True, cat_df=self.cat_df)
+            # else:
+            #     self.data_avail_plot = DataAvailPlot(parent=self, net_list=net_list, sta_list=sta_list,
+            #                                      chan_list=[chan], tags_list=tags_list,
+            #                                      rec_int_dict=self.recording_intervals)
+            #
+            # # connect to the go button in plot
+            # self.data_avail_plot.davailui.go_push_button.released.connect(self.intervals_selected)
 
     def plot_intervals_selected(self):
         ret = self.data_avail_plot.get_roi_data()
@@ -4406,7 +4424,7 @@ class Window(QtGui.QMainWindow):
         # go throuugh events
         for _i, event_id in enumerate(p_time_aux_events_list):
             print(event_id)
-            #open new empty data fram for pick times for event
+            # open new empty data fram for pick times for event
             temp_df = pd.DataFrame(data=None, columns=["pick_event_id", "sta", "P_pick_time", "P_as_pick_time"])
 
             # get the stations list
@@ -4480,7 +4498,8 @@ class Window(QtGui.QMainWindow):
         print(self.picks_df)
 
         self.ui.col_grad_w.setEnabled(True)
-        col_change = functools.partial(self.sort_method_selected, self.ui.sort_drop_down_button_2, ('no_sort', 'no_sort'),
+        col_change = functools.partial(self.sort_method_selected, self.ui.sort_drop_down_button_2,
+                                       ('no_sort', 'no_sort'),
                                        True)
         self.ui.col_grad_w.sigGradientChanged.connect(col_change)
 
@@ -4491,6 +4510,7 @@ class Window(QtGui.QMainWindow):
         self.sort_method_selected(self.ui.sort_drop_down_button_2, ('no_sort', 'no_sort'), False)
 
         self.events_to_df()
+
 
 def launch():
     # Automatically compile all ui files if they have been changed.
