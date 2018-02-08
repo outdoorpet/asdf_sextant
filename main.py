@@ -2430,6 +2430,8 @@ class Window(QtGui.QMainWindow):
         :return:
         """
 
+        print("update arrival plotting")
+
         # remove existing items
         for _i in range(len(self._state["arr_lines"])):
             for key in self._state["arr_lines"][_i]:
@@ -2447,18 +2449,18 @@ class Window(QtGui.QMainWindow):
         # get the event id
         self.select_quake = self.cat_df.loc[row_index]
 
-        print(self.st)
-        print(self.select_quake)
-        print(self.select_quake["event_id"])
+        # print(self.st)
+        # print(self.select_quake)
+        # print(self.select_quake["event_id"])
 
         for _i, tr in enumerate(self.st):
-            print(tr)
-            print(_i)
+            # print(tr)
+            # print(_i)
             tmp_plot = self._state["waveform_plots"][_i]
-            print(self._state["station_id"][_i])
+            # print(self._state["station_id"][_i])
 
             arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][tr.get_id().replace(".", "_")]
-            print(arrival_aux)
+            # print(arrival_aux)
 
 
             temp_arr_lines_dict = {}
@@ -2466,7 +2468,7 @@ class Window(QtGui.QMainWindow):
 
             # go through arrivals in aux data parameters
             for key in arrival_aux.parameters:
-                print(key)
+                # print(key)
                 if not key in ["distkm", "dist_deg"]:
                     # set up waveform plot vertical lines for arrivals
                     arr_line = pg.PlotCurveItem()
@@ -2489,18 +2491,19 @@ class Window(QtGui.QMainWindow):
                     temp_arr_lines_dict[key] = arr_line
                     temp_arr_text_dict[key] = arr_text
 
-                    print(temp_arr_lines_dict)
-                    print(temp_arr_text_dict)
+                    # print(temp_arr_lines_dict)
+                    # print(temp_arr_text_dict)
 
             self._state["arr_lines"].append(temp_arr_lines_dict)
             self._state["arr_text"].append(temp_arr_text_dict)
 
-            print("from update_arrival_plotting")
-            print(temp_arr_lines_dict)
-            print(temp_arr_text_dict)
 
+            # print(temp_arr_lines_dict)
+            # print(temp_arr_text_dict)
+
+        print("from update_arrival_plotting")
         print("---")
-        print(self._state["arr_text"][0])
+        print(self._state["arr_text"])
 
 
     # def get_arrival_info_for_stream(self):
@@ -2543,16 +2546,19 @@ class Window(QtGui.QMainWindow):
                     self.dispMousePos(pos)
 
     def waveform_plot_reset_all(self):
+        print("Waveform Plot Reset")
 
         for _i, plot in enumerate(self._state["waveform_plots"]):
-            print("Arrivals for: ",self._state["station_id"][_i])
+            # print("Arrivals for: ",self._state["station_id"][_i])
 
             self.active_plot = plot
             self.active_tr_index = _i
             plot.hideAxis("bottom")
-            # connect with the method to catch when waveform plot is interacated with
-            self.waveform_plot_interact()
+            if hasattr(self.ds.auxiliary_data, "ArrivalData"):
+                # connect with the method to catch when waveform plot is interacated with
+                self.waveform_plot_interact()
 
+    # TODO: Write functinality to downsample traces at particular zoom levels
     def waveform_plot_interact(self):
         # Method to catch when waveform plot is interacted with and will return the
         # interacted with plot (i.e. station) and will also resize the Arrival time vertical lines
@@ -2567,6 +2573,8 @@ class Window(QtGui.QMainWindow):
         # # when mouse is clicked with modifer then open picker
         # self.active_plot.scene().sigMouseClicked.connect(self.on_graph_itemClicked)
 
+        print("from waveform_plot_interact")
+        print("Active Station: ", self._state["station_id"][self.active_tr_index])
 
         temp_arr_lines_dict = self._state["arr_lines"][self.active_tr_index]
         temp_arr_text_dict = self._state["arr_text"][self.active_tr_index]
@@ -2578,12 +2586,12 @@ class Window(QtGui.QMainWindow):
         arrival_aux = self.ds.auxiliary_data.ArrivalData[self.select_quake["event_id"]][
             tr.get_id().replace(".", "_")]
 
-        print("from waveform_plot_interact")
-        print(self._state["arr_text"])
-        print(self.active_tr_index)
-        print(self.active_lock)
-        print(temp_arr_text_dict)
-        print(arrival_aux)
+
+        # print(self._state["arr_text"])
+        # print(self.active_tr_index)
+        # print(self.active_lock)
+        # print(temp_arr_text_dict)
+        # print(arrival_aux)
 
         # p_line = self._state["p_lines"][self.active_tr_index]
         # p_as_line = self._state["p_as_lines"][self.active_tr_index]
@@ -2594,7 +2602,7 @@ class Window(QtGui.QMainWindow):
         # go through every arrival
         for key in temp_arr_lines_dict:
 
-            print(key)
+            # print(key)
             arr_line = temp_arr_lines_dict[key]
             arr_text = temp_arr_text_dict[key]
 
@@ -2609,7 +2617,7 @@ class Window(QtGui.QMainWindow):
                 arr_col = '#87CEFA'
 
             arr_timestamp = UTCDateTime(arrival_aux.parameters[key]).timestamp
-            print(arr_timestamp)
+            # print(arr_timestamp)
 
             arr_line.setData(np.array([arr_timestamp, arr_timestamp]),
                               np.array([axY.range[0] + 0.05 * (axY.range[1] - axY.range[0]),
@@ -2792,24 +2800,33 @@ class Window(QtGui.QMainWindow):
         print("plotting data")
 
         for _i, tr in enumerate(temp_st):
-            self.plot = self.waveform_graph.addPlot(
+            plot = self.waveform_graph.addPlot(
                 _i, 0, title=tr.id,
                 axisItems={'bottom': DateAxisItem(orientation='bottom',
                                                   utcOffset=0)})
-            self.plot.show()
+            plot.show()
 
-            # print(self.plot)
-            self._state["waveform_plots"].append(self.plot)
+            # print(plot)
+            self._state["waveform_plots"].append(plot)
             self._state["station_id"].append(tr.stats.network + '.' +
                                              tr.stats.station + '.' +
                                              tr.stats.location + '.' +
                                              tr.stats.channel)
             self._state["station_tag"].append(str(tr.stats.asdf.tag))
-            self.plot.plot(tr.times() + tr.stats.starttime.timestamp, tr.data)
+            plot.plot(tr.times() + tr.stats.starttime.timestamp, tr.data)
             starttimes.append(tr.stats.starttime)
             endtimes.append(tr.stats.endtime)
             min_values.append(tr.data.min())
             max_values.append(tr.data.max())
+
+            self.active_plot = plot
+            self.active_tr_index = _i
+
+            # connect the active plot to the arrival picker if the mouse is clicked
+            # self.active_plot.scene().sigMouseClicked.connect(self.waveform_widget_itemClicked)
+            #
+            # # connect with the method to catch when waveform plot is intercated with
+            # self.active_plot.sigRangeChanged.connect(self.waveform_plot_interact)
 
             # When Mouse is moved over plot print the data coordinates
             # self.plot.scene().sigMouseMoved.connect(self.dispMousePos)
@@ -2866,9 +2883,7 @@ class Window(QtGui.QMainWindow):
             # self.plot.scene().HoverEvent.connect(self.waveform_plot_hovered)
 
 
-        # check if the dataset has arrivaldata in the auxillary info
-        if hasattr(self.ds.auxiliary_data, "ArrivalData"):
-            self.update_arrival_plotting()
+
 
         self.waveform_graph.setNumberPlots(len(temp_st))
 
@@ -2884,7 +2899,7 @@ class Window(QtGui.QMainWindow):
 
         for plot in self._state["waveform_plots"][1:]:
             plot.setXLink(self._state["waveform_plots"][0])
-            plot.setYLink(self._state["waveform_plots"][0])
+            # plot.setYLink(self._state["waveform_plots"][0])
 
         # for _i, plot in enumerate(self._state["waveform_plots"]):
         #     # print(_i)
@@ -2897,18 +2912,26 @@ class Window(QtGui.QMainWindow):
         #     # plot.sigRangeChanged.connect(functools.partial(self.waveform_plot_interact, (plot, _i)))
         #     self.waveform_plot_interact()
 
-        self.waveform_plot_reset_all()
+
 
         # connect the waveform graph widget to the mouse moved listener
+        # check if the dataset has arrivaldata in the auxillary info
+        if hasattr(self.ds.auxiliary_data, "ArrivalData"):
+            self.update_arrival_plotting()
+            # connect with the method to catch when waveform plot is intercated with
+            self.active_plot.sigRangeChanged.connect(self.waveform_plot_interact)
+
         self.waveform_graph.scene().sigMouseMoved.connect(self.waveform_plot_mouseMoved)
 
         # connect the active plot to the arrival picker if the mouse is clicked
         self.active_plot.scene().sigMouseClicked.connect(self.waveform_widget_itemClicked)
 
-        # connect with the method to catch when waveform plot is intercated with
-        self.active_plot.sigRangeChanged.connect(self.waveform_plot_interact)
+        # # connect with the method to catch when waveform plot is intercated with
+        # self.active_plot.sigRangeChanged.connect(self.waveform_plot_interact)
 
         self._state["waveform_plots"][-1].showAxis("bottom")
+
+        self.waveform_plot_reset_all()
 
         self.reset_view()
 
@@ -3006,6 +3029,7 @@ class Window(QtGui.QMainWindow):
             return station
 
         def select_file(ds_id):
+
             # change the selected file
             self.change_active_ASDF(ds_id)
             for value in self.ASDF_accessor.values():
@@ -3581,6 +3605,9 @@ class Window(QtGui.QMainWindow):
             # append the asdf id tag into the trace stats so that the original data is accesbale
             temp_tr.stats.asdf.orig_id = matched_info["ASDF_tag"]
 
+            # # if the channel is BKO i.e. temp channel then divde by 1 million
+            # if temp_tr.stats.channel ==
+
             # append trace to stream
             st += temp_tr
 
@@ -3597,6 +3624,14 @@ class Window(QtGui.QMainWindow):
                 st.merge(fill_value=0)
                 print('\nTrimming Traces to specified time interval....')
                 st.trim(starttime=UTCDateTime(interval_tuple[0]), endtime=UTCDateTime(interval_tuple[1]))
+
+                # if the channel is BKO i.e. temp channel then divde by 1 million
+                temp_channels_st = st.select(channel="*KO")
+
+                for tr in temp_channels_st:
+                    tr.normalize(1000000)
+
+
                 return st
             else:
                 return None
