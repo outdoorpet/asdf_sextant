@@ -228,6 +228,26 @@ class SeisDB(object):
 
         return (np.array([rec_start_list, rec_end_list]))
 
+
+    def get_data_percentage(self, net, sta, chan, tags):
+
+        # call intervals calc
+        intervals_array = self.get_recording_intervals(net, sta, chan, tags)
+
+        gaps_array = self.get_gaps_intervals(net, sta, chan, tags)
+
+
+        print("Getting data percentage")
+
+        print([intervals_array[1][x] - intervals_array[0][x] for x in range(len(intervals_array[0]))])
+
+        total_rec_seconds = sum([intervals_array[1][x] - intervals_array[0][x] for x in range(len(intervals_array[0]))])
+        total_gaps_seconds = sum([gaps_array[1][x] - gaps_array[0][x] for x in range(len(gaps_array[0]))])
+
+        print(total_rec_seconds, total_gaps_seconds)
+        print("Percentage of Gaps: ", 100*(total_gaps_seconds/total_rec_seconds))
+        print("Percentage of Recording: ", 100 * (1-(total_gaps_seconds / total_rec_seconds)))
+
     def get_gaps_intervals(self, net, sta, chan, tags):
 
         # print(self._indexed_np_array)

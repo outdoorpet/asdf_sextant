@@ -1867,6 +1867,9 @@ class Window(QtGui.QMainWindow):
             # create the seismic database
             seisdb = SeisDB(json_file=db_file[0])
 
+
+
+
             # add it to the asdf accessor
             self.ASDF_accessor[os.path.basename(asdf_file)]["db"] = seisdb
 
@@ -1915,7 +1918,7 @@ class Window(QtGui.QMainWindow):
         self.cat_filename = str(QtGui.QFileDialog.getOpenFileName(
             parent=self, caption="Choose Earthquake QuakeML File",
             directory=os.path.expanduser("~"),
-            filter="QuakeML files (*.xml)"))
+            filter="QuakeML files (*.*ml)"))
         if not self.cat_filename:
             return
 
@@ -1936,7 +1939,7 @@ class Window(QtGui.QMainWindow):
                 # No magnitude for event
                 magnitude = None
 
-            self.cat_df.loc[_i] = [str(event.resource_id.id).split('=')[1], int(origin_info.time.timestamp),
+            self.cat_df.loc[_i] = [str(event.resource_id.id).split('/')[1], int(origin_info.time.timestamp),
                                    origin_info.latitude, origin_info.longitude,
                                    origin_info.depth / 1000, magnitude]
 
@@ -2504,7 +2507,6 @@ class Window(QtGui.QMainWindow):
         print("from update_arrival_plotting")
         print("---")
         print(self._state["arr_text"])
-
 
     # def get_arrival_info_for_stream(self):
     #     """
@@ -4217,6 +4219,9 @@ class Window(QtGui.QMainWindow):
             for net_sta in net_sta_list:
 
                 if net_sta.split('.')[0] in select_net and net_sta.split('.')[1] in select_sta:
+                    print(net_sta)
+                    print(self.db.get_data_percentage(net_sta.split('.')[0], net_sta.split('.')[1],
+                                                                      select_chan[0], select_tags[0]))
                     # get the recording intervals of the station for the selected channel and tag
                     intervals_array = self.db.get_recording_intervals(net_sta.split('.')[0], net_sta.split('.')[1],
                                                                       select_chan[0], select_tags[0])
